@@ -3,6 +3,15 @@
  * Plain vanilla JS, no frameworks.
  */
 
+// ── Mana Symbol Formatter (Magic Card Style) ──────────────────────────────────
+function formatManaCost(manaCost) {
+  if (!manaCost) return '<span style="color:var(--text-dim);">—</span>';
+  return manaCost.replace(/\{([A-Za-z0-9\/]+)\}/g, (match, sym) => {
+    const clean = sym.replace('/', '').toUpperCase();
+    return `<img src="/static/mana/${clean}.svg" class="mana-symbol" alt="${match}" title="${match}" onerror="this.onerror=null; this.src='https://svgs.scryfall.io/card-symbols/${clean}.svg';" />`;
+  });
+}
+
 // ── Shared state ──────────────────────────────────────────────────────────────
 let currentPage = 1;
 let currentFilters = {};
@@ -149,7 +158,7 @@ function renderCardModal(card, scryfallCard) {
         <div>
           <div class="modal-name">${escHtml(name)}</div>
           <div class="modal-type">${escHtml(typeLine)}</div>
-          ${manaCost ? `<div class="modal-mana">${escHtml(manaCost)}</div>` : ''}
+          ${manaCost ? `<div class="modal-mana">${formatManaCost(manaCost)}</div>` : ''}
         </div>
         ${oracleText ? `<div class="modal-text">${escHtml(oracleText)}</div>` : ''}
         
@@ -237,15 +246,10 @@ function renderCardModal(card, scryfallCard) {
           <option value="true"  ${card.foil  ? 'selected' : ''}>Foil</option>
         </select>
       </div>
-      <div class="form-group">
-        <label class="form-label">Storage Location</label>
+      <div class="form-group" style="grid-column: span 2;">
+        <label class="form-label">Storage Location / Box</label>
         <input type="text" class="filter-input" id="edit-storage"
-               value="${escHtml(card.storage_location || '')}" placeholder="e.g. PRISM Tray, Binder A" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">Purchase Price ($)</label>
-        <input type="number" class="filter-input" id="edit-price"
-               value="${card.purchase_price ?? ''}" min="0" step="0.01" placeholder="Optional" />
+               value="${escHtml(card.storage_location || '')}" placeholder="e.g. PRISM Tray, Binder A, Commander Box" />
       </div>
     </div>
     ` : ''}
@@ -271,7 +275,6 @@ function renderCardModal(card, scryfallCard) {
         condition: 'NM', // Quality/condition simplified to NM
         foil: document.getElementById('edit-foil').value === 'true',
         storage_location: document.getElementById('edit-storage').value,
-        purchase_price: parseFloat(document.getElementById('edit-price').value) || null,
       };
       try {
         await apiFetch(`/api/collection/${card.id}`, {
@@ -322,15 +325,36 @@ async function populateDeckFilter() {
   const select = document.getElementById('filter-deck');
   if (!select) return;
   try {
-    const decks = await apiFetch('/api/decks');
-    select.innerHTML = `
-      <option value="">All Decks &amp; Pool</option>
-      <option value="shared">⚡ PRISM Shared (2+ decks)</option>
-      <option value="unassigned">📦 Binder / Unassigned</option>
+    const [decks, locations] = await Promise.all([
+      apiFetch('/api/decks').catch(() => []),
+      apiFetch('/api/collection/storage-locations').catch(() => []),
+    ]);
+
+    let html = `
+      <option value="">All Decks, Boxes &amp; Pool</option>
+      <optgroup label="PRISM System">
+        <option value="shared">⚡ PRISM Shared (2+ decks)</option>
+        <option value="unassigned">📦 Binder / Unassigned</option>
+      </optgroup>
     `;
-    decks.forEach(d => {
-      select.innerHTML += `<option value="${d.id}">🗂️ ${escHtml(d.name)}</option>`;
-    });
+
+    if (decks && decks.length > 0) {
+      html += `<optgroup label="Decks">`;
+      decks.forEach(d => {
+        html += `<option value="deck:${d.id}">🗂️ ${escHtml(d.name)}</option>`;
+      });
+      html += `</optgroup>`;
+    }
+
+    if (locations && locations.length > 0) {
+      html += `<optgroup label="Storage Boxes &amp; Binders">`;
+      locations.forEach(loc => {
+        html += `<option value="storage:${escHtml(loc)}">📦 ${escHtml(loc)}</option>`;
+      });
+      html += `</optgroup>`;
+    }
+
+    select.innerHTML = html;
   } catch (e) { /* silent */ }
 }
 
@@ -378,14 +402,6 @@ function initCollectionPage() {
     }
   });
 
-  const storageInput = document.getElementById('filter-storage');
-  if (storageInput) {
-    storageInput.addEventListener('input', () => {
-      clearTimeout(searchDebounceTimer);
-      searchDebounceTimer = setTimeout(() => { currentPage = 1; loadCollection(); }, 350);
-    });
-  }
-
   document.getElementById('btn-clear-filters').addEventListener('click', () => {
     document.getElementById('search-q').value = '';
     const deckFilter = document.getElementById('filter-deck');
@@ -393,7 +409,6 @@ function initCollectionPage() {
     document.getElementById('filter-color').value = '';
     document.getElementById('filter-rarity').value = '';
     document.getElementById('filter-foil').value = '';
-    if (storageInput) storageInput.value = '';
     document.getElementById('filter-sort').value = 'name';
     currentPage = 1;
     loadCollection();
@@ -429,7 +444,6 @@ async function loadCollection() {
     color:    document.getElementById('filter-color').value,
     rarity:   document.getElementById('filter-rarity').value,
     foil:     document.getElementById('filter-foil').value,
-    storage:  document.getElementById('filter-storage')?.value.trim() || '',
     sort:     sortBy,
     order:    sortOrder,
     page:     currentPage,
@@ -492,7 +506,7 @@ function renderGrid(data) {
               ${card.foil ? '<span class="badge badge-foil" title="Foil">✦</span>' : ''}
             </div>
           </td>
-          <td><span class="table-mana">${escHtml(card.mana_cost || '—')}</span></td>
+          <td><span class="table-mana">${formatManaCost(card.mana_cost)}</span></td>
           <td><span class="table-type" title="${escHtml(card.type_line || '')}">${escHtml(card.type_line || '—')}</span></td>
           <td class="text-center"><span class="badge badge-set">${escHtml(card.set_code || '—')}</span></td>
           <td class="text-center"><span class="badge badge-rarity rarity-${card.rarity}">${capitalize(card.rarity || '—')}</span></td>
@@ -529,7 +543,7 @@ function renderGrid(data) {
             <div>
               <div class="card-tile-header">
                 <div class="card-tile-name">${escHtml(card.name)}</div>
-                ${card.mana_cost ? `<span class="card-tile-mana">${escHtml(card.mana_cost)}</span>` : ''}
+                ${card.mana_cost ? `<span class="card-tile-mana">${formatManaCost(card.mana_cost)}</span>` : ''}
               </div>
               ${card.type_line ? `<div class="card-tile-type">${escHtml(card.type_line)}</div>` : ''}
             </div>

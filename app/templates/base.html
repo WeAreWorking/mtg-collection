@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{% block title %}MTG Collection // PRISM Base{% endblock %}</title>
+  <title>{% block title %}MTG Collection App{% endblock %}</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -13,9 +14,9 @@
 
   <nav class="navbar">
     <div class="nav-brand">
-      <span class="nav-logo">🛸</span>
+      <img src="{{ url_for('static', filename='logo.png') }}" class="nav-logo-img" alt="Logo" onerror="this.style.display='none'; document.getElementById('nav-fallback-icon').style.display='inline-block';" />
+      <span class="nav-logo" id="nav-fallback-icon" style="display:none;">🌌</span>
       <span class="nav-title">MTG <span class="nav-title-glow">PRISM</span></span>
-      <span class="nav-tagline">STATION // 7432</span>
     </div>
     <div class="nav-links">
       <a href="/collection" class="nav-link {% if request.path == '/collection' %}active{% endif %}">

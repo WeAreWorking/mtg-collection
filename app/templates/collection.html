@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Collection — MTG Collection{% endblock %}
+{% block title %}MTG Collection App{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -18,7 +18,7 @@
          placeholder="Search by name, type, or oracle text…" autocomplete="off" />
 
   <select id="filter-deck" class="filter-select">
-    <option value="">All Decks &amp; Pool</option>
+    <option value="">All Decks, Boxes &amp; Pool</option>
     <option value="shared">⚡ PRISM Shared (2+ decks)</option>
     <option value="unassigned">📦 Binder / Unassigned</option>
   </select>
@@ -46,9 +46,6 @@
     <option value="true">✦ Foil Only</option>
     <option value="false">Non-Foil Only</option>
   </select>
-
-  <input type="text" id="filter-storage" class="filter-input"
-         placeholder="Storage / Box…" autocomplete="off" />
 
   <select id="filter-sort" class="filter-select">
     <option value="name">Sort: Name</option>

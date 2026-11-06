@@ -107,6 +107,17 @@ def api_collection():
         elif in_deck == 'unassigned':
             assigned_names = db.session.query(DeckCard.name).distinct().subquery()
             query = query.filter(~Card.name.in_(assigned_names))
+        elif in_deck.startswith('storage:'):
+            loc = in_deck.split(':', 1)[1]
+            query = query.filter(Card.storage_location == loc)
+        elif in_deck.startswith('deck:'):
+            deck_id = int(in_deck.split(':', 1)[1])
+            deck_card_names = (
+                db.session.query(DeckCard.name)
+                .filter(DeckCard.deck_id == deck_id)
+                .subquery()
+            )
+            query = query.filter(Card.name.in_(deck_card_names))
         elif in_deck.isdigit():
             deck_card_names = (
                 db.session.query(DeckCard.name)
@@ -115,28 +126,81 @@ def api_collection():
             )
             query = query.filter(Card.name.in_(deck_card_names))
 
-    # Sorting
-    sort_col = {
-        'name': Card.name,
-        'cmc': Card.cmc,
-        'rarity': Card.rarity,
-        'added_at': Card.added_at,
-        'price': Card.price_usd,
-        'price_cad': Card.price_cad,
-    }.get(sort_by, Card.name)
-    if order == 'desc':
-        sort_col = sort_col.desc()
-    elif sort_by in ('price', 'price_cad'):
-        # For price sorting, nulls should sort to bottom
-        sort_col = sort_col.desc() if order == 'desc' else sort_col.asc()
-    query = query.order_by(sort_col)
+    # Fetch all matching rows to clump duplicate printings by name
+    all_matching = query.all()
 
-    total = query.count()
-    total_quantity = query.with_entities(db.func.sum(Card.quantity)).scalar() or 0
-    cards = query.offset((page - 1) * per_page).limit(per_page).all()
+    # Clump by card name
+    grouped = {}
+    for c in all_matching:
+        grouped.setdefault(c.name, []).append(c)
+
+    clumped_cards = []
+    for name, copies in grouped.items():
+        # Pick primary copy (prefer foil, or with image, or first)
+        primary = next((c for c in copies if c.foil and c.image_uri), None)
+        if not primary:
+            primary = next((c for c in copies if c.image_uri), copies[0])
+
+        total_qty = sum(c.quantity for c in copies)
+        has_foil = any(c.foil for c in copies)
+
+        printings = []
+        for c in copies:
+            printings.append({
+                'id': c.id,
+                'scryfall_id': c.scryfall_id,
+                'set_code': c.set_code,
+                'set_name': c.set_name,
+                'collector_number': c.collector_number,
+                'quantity': c.quantity,
+                'foil': c.foil,
+                'condition': c.condition or 'NM',
+                'storage_location': c.storage_location or '',
+                'price_usd': c.price_usd_foil if (c.foil and c.price_usd_foil) else c.price_usd,
+                'price_cad': c.price_cad,
+                'image_uri': c.image_uri,
+            })
+
+        sets = []
+        for c in copies:
+            if c.set_code and c.set_code not in sets:
+                sets.append(c.set_code)
+
+        storage_locs = []
+        for c in copies:
+            if c.storage_location and c.storage_location not in storage_locs:
+                storage_locs.append(c.storage_location)
+
+        cd = primary.to_dict()
+        cd['quantity'] = total_qty
+        cd['foil'] = has_foil
+        cd['printings_count'] = len(copies)
+        cd['printings'] = printings
+        cd['sets'] = sets
+        cd['storage_locations'] = storage_locs
+        cd['storage_location'] = ', '.join(storage_locs) if storage_locs else ''
+        clumped_cards.append(cd)
+
+    # Sorting clumped cards
+    reverse = (order == 'desc')
+    if sort_by == 'name':
+        clumped_cards.sort(key=lambda x: (x['name'] or '').lower(), reverse=reverse)
+    elif sort_by in ('price', 'price_cad'):
+        clumped_cards.sort(key=lambda x: (x['price_usd'] or 0.0), reverse=reverse)
+    elif sort_by == 'cmc':
+        clumped_cards.sort(key=lambda x: (x['cmc'] or 0.0), reverse=reverse)
+    elif sort_by == 'rarity':
+        rarity_ranks = {'mythic': 4, 'rare': 3, 'uncommon': 2, 'common': 1}
+        clumped_cards.sort(key=lambda x: rarity_ranks.get((x['rarity'] or '').lower(), 0), reverse=reverse)
+    elif sort_by == 'added_at':
+        clumped_cards.sort(key=lambda x: x.get('added_at') or '', reverse=reverse)
+
+    total_unique = len(clumped_cards)
+    total_quantity = sum(c['quantity'] for c in clumped_cards)
+    paged_cards = clumped_cards[(page - 1) * per_page : page * per_page]
 
     # Look up deck associations for PRISM multi-deck tracking
-    card_names = [c.name for c in cards]
+    card_names = [c['name'] for c in paged_cards]
     deck_map = {}
     if card_names:
         deck_cards = (
@@ -151,20 +215,17 @@ def api_collection():
                 'is_commander': dc.is_commander
             })
 
-    card_dicts = []
-    for c in cards:
-        cd = c.to_dict()
-        cd['decks'] = deck_map.get(c.name, [])
-        card_dicts.append(cd)
+    for c in paged_cards:
+        c['decks'] = deck_map.get(c['name'], [])
 
     return jsonify({
-        'total': total,
-        'total_unique': total,
+        'total': total_unique,
+        'total_unique': total_unique,
         'total_quantity': total_quantity,
         'page': page,
         'per_page': per_page,
-        'pages': max(1, (total + per_page - 1) // per_page),
-        'cards': card_dicts,
+        'pages': max(1, (total_unique + per_page - 1) // per_page),
+        'cards': paged_cards,
     })
 
 
@@ -308,6 +369,145 @@ def api_deck_delete(deck_id):
     db.session.delete(deck)
     db.session.commit()
     return jsonify({'success': True})
+
+
+@main.route('/api/decks/<int:deck_id>', methods=['PUT'])
+def api_deck_edit(deck_id):
+    """Update deck name, format, or description."""
+    deck = Deck.query.get_or_404(deck_id)
+    data = request.get_json() or {}
+
+    if 'name' in data:
+        name = data['name'].strip()
+        if not name:
+            return jsonify({'error': 'Deck name cannot be empty'}), 400
+        deck.name = name
+
+    if 'format' in data:
+        deck.format = data['format'].strip()
+
+    if 'description' in data:
+        deck.description = data['description']
+
+    db.session.commit()
+    return jsonify(deck.to_dict())
+
+
+@main.route('/api/decks/<int:deck_id>/cards', methods=['POST'])
+def api_deck_card_add(deck_id):
+    """Add a card to the deck (from collection or manual add)."""
+    deck = Deck.query.get_or_404(deck_id)
+    data = request.get_json() or {}
+    name = data.get('name', '').strip()
+    if not name:
+        return jsonify({'error': 'Card name required'}), 400
+
+    qty = max(1, int(data.get('quantity', 1)))
+    is_cmd = bool(data.get('is_commander', False))
+    is_sb = bool(data.get('is_sideboard', False))
+
+    # Check if card already exists in this deck under the same slot
+    existing = DeckCard.query.filter_by(
+        deck_id=deck_id,
+        name=name,
+        is_commander=is_cmd,
+        is_sideboard=is_sb
+    ).first()
+
+    if existing:
+        existing.quantity += qty
+        db.session.commit()
+        return jsonify(existing.to_dict())
+
+    # Look up metadata from collection if not passed
+    col_card = Card.query.filter_by(name=name).first()
+    dc = DeckCard(
+        deck_id=deck_id,
+        name=name,
+        quantity=qty,
+        is_commander=is_cmd,
+        is_sideboard=is_sb,
+        scryfall_id=data.get('scryfall_id') or (col_card.scryfall_id if col_card else None),
+        set_code=data.get('set_code') or (col_card.set_code if col_card else None),
+        image_uri=data.get('image_uri') or (col_card.image_uri if col_card else None),
+        type_line=data.get('type_line') or (col_card.type_line if col_card else None),
+        mana_cost=data.get('mana_cost') or (col_card.mana_cost if col_card else None),
+        colors=data.get('colors') or (col_card.colors if col_card else None),
+    )
+    db.session.add(dc)
+    db.session.commit()
+    return jsonify(dc.to_dict()), 201
+
+
+@main.route('/api/decks/<int:deck_id>/cards/<int:card_id>', methods=['PUT'])
+def api_deck_card_edit(deck_id, card_id):
+    """Edit card quantity or commander/sideboard flags in a deck."""
+    dc = DeckCard.query.filter_by(id=card_id, deck_id=deck_id).first_or_404()
+    data = request.get_json() or {}
+
+    if 'quantity' in data:
+        q = int(data['quantity'])
+        if q <= 0:
+            db.session.delete(dc)
+            db.session.commit()
+            return jsonify({'deleted': True})
+        dc.quantity = q
+
+    if 'is_commander' in data:
+        dc.is_commander = bool(data['is_commander'])
+        if dc.is_commander:
+            dc.is_sideboard = False
+
+    if 'is_sideboard' in data:
+        dc.is_sideboard = bool(data['is_sideboard'])
+        if dc.is_sideboard:
+            dc.is_commander = False
+
+    db.session.commit()
+    return jsonify(dc.to_dict())
+
+
+@main.route('/api/decks/<int:deck_id>/cards/<int:card_id>', methods=['DELETE'])
+def api_deck_card_delete(deck_id, card_id):
+    """Remove a card entry from a deck."""
+    dc = DeckCard.query.filter_by(id=card_id, deck_id=deck_id).first_or_404()
+    db.session.delete(dc)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@main.route('/api/collection/search')
+def api_collection_search():
+    """Search cards currently in the user's collection for adding to decks."""
+    q = request.args.get('q', '').strip()
+    if not q:
+        return jsonify([])
+
+    like = f'%{q}%'
+    cards = (
+        Card.query
+        .filter(or_(Card.name.ilike(like), Card.type_line.ilike(like)))
+        .order_by(Card.name)
+        .limit(30)
+        .all()
+    )
+
+    results = {}
+    for c in cards:
+        if c.name not in results:
+            results[c.name] = {
+                'name': c.name,
+                'scryfall_id': c.scryfall_id,
+                'image_uri': c.image_uri,
+                'mana_cost': c.mana_cost,
+                'type_line': c.type_line,
+                'set_code': c.set_code,
+                'total_owned': c.quantity,
+            }
+        else:
+            results[c.name]['total_owned'] += c.quantity
+
+    return jsonify(list(results.values()))
 
 
 # ── Stats API ─────────────────────────────────────────────────────────────────

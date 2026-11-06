@@ -86,6 +86,16 @@ code {
 }
 
 .nav-brand { display: flex; align-items: center; gap: 0.65rem; }
+.nav-logo-img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.35);
+  filter: drop-shadow(0 0 6px rgba(0, 240, 255, 0.4));
+  vertical-align: middle;
+}
 .nav-logo  { font-size: 1.5rem; filter: drop-shadow(0 0 8px var(--cyan)); }
 .nav-title {
   font-weight: 700;
@@ -432,11 +442,11 @@ code {
   background: #11152c;
   color: var(--cyan);
   font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 0.8rem 1rem;
+  padding: 0.65rem 0.6rem;
   border-bottom: 2px solid var(--cyan);
   position: sticky;
   top: 0;
@@ -459,7 +469,7 @@ code {
 }
 
 .spreadsheet-table td {
-  padding: 0.65rem 1rem;
+  padding: 0.45rem 0.6rem;
   vertical-align: middle;
 }
 
@@ -468,24 +478,52 @@ code {
   color: #fff;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
+  white-space: nowrap;
 }
 .table-card-name:hover {
   color: var(--cyan);
 }
 .table-mana {
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: var(--cyan);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   white-space: nowrap;
+}
+
+/* ── Authentic Magic Card Mana Symbols ─────────────────────────────────────── */
+.mana-symbol {
+  display: inline-block;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  vertical-align: -2px;
+  margin: 0 1px;
+  box-shadow: -1px 1px 2px rgba(0, 0, 0, 0.65);
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.7));
+  flex-shrink: 0;
+}
+.table-mana .mana-symbol {
+  width: 16px;
+  height: 16px;
+}
+.card-tile-mana .mana-symbol {
+  width: 15px;
+  height: 15px;
+}
+.modal-mana .mana-symbol {
+  width: 22px;
+  height: 22px;
+  margin: 0 2px;
 }
 .table-type {
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   white-space: nowrap;
-  max-width: 220px;
+  max-width: 125px;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: block;
 }
 .table-price {
   font-family: var(--font-mono);
@@ -500,6 +538,7 @@ code {
   gap: 0.35rem;
   flex-wrap: wrap;
   align-items: center;
+  max-width: 180px;
 }
 
 .text-center { text-align: center; }
@@ -718,13 +757,21 @@ code {
 .deck-card-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.85rem;
   padding: 0.45rem 0.65rem;
   border-radius: var(--radius-sm);
-  cursor: pointer;
   transition: background var(--transition);
 }
 .deck-card-row:hover { background: var(--bg-elevated); }
+.deck-card-row-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
 .deck-card-thumb {
   width: 38px;
   height: 52px;
@@ -733,14 +780,93 @@ code {
   flex-shrink: 0;
 }
 .deck-card-row-name { font-size: 0.92rem; font-weight: 600; color: #fff; }
+.deck-card-row-type { font-size: 0.78rem; color: var(--text-muted); font-family: var(--font-mono); }
+.deck-card-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+.deck-qty-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.btn-qty-minus, .btn-qty-plus {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: #fff;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-qty-minus:hover, .btn-qty-plus:hover {
+  background: var(--cyan);
+  color: #000;
+  border-color: var(--cyan);
+}
 .deck-card-row-qty {
-  margin-left: auto;
   color: var(--green);
   font-family: var(--font-mono);
   font-size: 0.85rem;
   font-weight: 700;
+  min-width: 24px;
+  text-align: center;
 }
-.deck-card-row-type { font-size: 0.78rem; color: var(--text-muted); font-family: var(--font-mono); }
+.btn-role-toggle {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.15s;
+}
+.btn-role-toggle:hover {
+  border-color: var(--text);
+  color: #fff;
+}
+.btn-role-toggle.active {
+  background: rgba(255, 215, 0, 0.15);
+  border-color: rgba(255, 215, 0, 0.45);
+  color: #ffd700;
+  font-weight: 600;
+}
+.btn-card-delete {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+.btn-card-delete:hover {
+  color: var(--pink);
+  background: rgba(255, 42, 133, 0.15);
+}
+.search-result-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--bg-card);
+  transition: background 0.15s;
+}
+.search-result-item:hover {
+  background: var(--bg-elevated);
+}
 
 /* ── Import page ───────────────────────────────────────────────────────────── */
 .tab-bar {
