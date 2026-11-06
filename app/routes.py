@@ -30,10 +30,10 @@ def decks_page():
     return render_template('decks.html')
 
 
-@main.route('/prism')
+@main.route('/sorting')
 @main.route('/build')
-def prism_builder_page():
-    return render_template('prism.html')
+def sorting_builder_page():
+    return render_template('sorting.html')
 
 
 # ── Collection API ────────────────────────────────────────────────────────────
@@ -199,7 +199,7 @@ def api_collection():
     total_quantity = sum(c['quantity'] for c in clumped_cards)
     paged_cards = clumped_cards[(page - 1) * per_page : page * per_page]
 
-    # Look up deck associations for PRISM multi-deck tracking
+    # Look up deck associations for SORTING multi-deck tracking
     card_names = [c['name'] for c in paged_cards]
     deck_map = {}
     if card_names:
@@ -251,10 +251,30 @@ def api_card_edit(card_id):
 
 @main.route('/api/collection/<int:card_id>', methods=['DELETE'])
 def api_card_delete(card_id):
+    """
+    Remove a single physical printing from the collection.
+    If this was the last copy of that card name, also remove the card from every deck
+    (since a deck entry represents a card you physically own).
+    Removing a card from a deck via the decks API never touches the collection.
+    """
     card = Card.query.get_or_404(card_id)
+    card_name = card.name
     db.session.delete(card)
+    db.session.flush()
+
+    remaining = Card.query.filter_by(name=card_name).count()
+    removed_from_decks = 0
+    if remaining == 0:
+        # No copies left in collection -> remove from all decks
+        removed_from_decks = (
+            DeckCard.query.filter_by(name=card_name).delete(synchronize_session=False)
+        )
+
     db.session.commit()
-    return jsonify({'success': True})
+    return jsonify({
+        'success': True,
+        'removed_from_decks': removed_from_decks,
+    })
 
 
 @main.route('/api/collection/storage-locations')
@@ -320,11 +340,11 @@ def api_import_deck():
     return jsonify(result)
 
 
-# ── PRISM Overlap API ─────────────────────────────────────────────────────────
+# ── SORTING Overlap API ─────────────────────────────────────────────────────────
 
-@main.route('/api/prism/shared')
-def api_prism_shared():
-    """Returns cards that appear in 2 or more decks for PRISM modular system."""
+@main.route('/api/sorting/shared')
+def api_sorting_shared():
+    """Returns cards that appear in 2 or more decks for SORTING modular system."""
     shared = (
         db.session.query(
             DeckCard.name,
@@ -488,9 +508,21 @@ def api_collection_search():
         Card.query
         .filter(or_(Card.name.ilike(like), Card.type_line.ilike(like)))
         .order_by(Card.name)
-        .limit(30)
+        .limit(60)
         .all()
     )
+
+    # Group by name and sum owned quantities across all printings
+    names = list({c.name for c in cards})
+    totals = {}
+    if names:
+        rows = (
+            db.session.query(Card.name, db.func.sum(Card.quantity))
+            .filter(Card.name.in_(names))
+            .group_by(Card.name)
+            .all()
+        )
+        totals = {name: total or 0 for name, total in rows}
 
     results = {}
     for c in cards:
@@ -502,10 +534,8 @@ def api_collection_search():
                 'mana_cost': c.mana_cost,
                 'type_line': c.type_line,
                 'set_code': c.set_code,
-                'total_owned': c.quantity,
+                'total_owned': totals.get(c.name, c.quantity),
             }
-        else:
-            results[c.name]['total_owned'] += c.quantity
 
     return jsonify(list(results.values()))
 
@@ -519,7 +549,8 @@ def api_stats():
     cad_rate = pricing.get_usd_to_cad_rate()
 
     total_cards = db.session.query(db.func.sum(Card.quantity)).scalar() or 0
-    unique_cards = Card.query.count()
+    # Unique by card name so different printings of the same card count once
+    unique_cards = db.session.query(db.func.count(db.func.distinct(Card.name))).scalar() or 0
     total_decks = Deck.query.count()
 
     # Calculate total collection market value in USD and CAD
@@ -623,18 +654,18 @@ def api_refresh_prices():
     })
 
 
-# ── PRISM Sync API ────────────────────────────────────────────────────────────
+# ── SORTING Sync API ────────────────────────────────────────────────────────────
 
-@main.route('/api/prism/sync-data')
-def api_prism_sync_data():
+@main.route('/api/sorting/sync-data')
+def api_sorting_sync_data():
     """
-    Returns all decks and cards from the database formatted for the PRISM tool.
-    Allows 1-click import into the PRISM Sleeve Marking app.
+    Returns all decks and cards from the database formatted for the SORTING tool.
+    Allows 1-click import into the SORTING Sleeve Marking app.
     """
     decks = Deck.query.order_by(Deck.name).all()
     deck_list = []
     
-    # Palette of distinctive colors for PRISM sleeve marking
+    # Palette of distinctive colors for SORTING sleeve marking
     default_colors = [
         '#EEB41B', '#E54D2E', '#3E63DD', '#46A758', '#AB4ABA',
         '#00A2C7', '#F76B15', '#9E5CF2', '#FFDC00', '#2B9A66'

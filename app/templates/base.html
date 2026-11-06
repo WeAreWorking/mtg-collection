@@ -16,7 +16,7 @@
     <div class="nav-brand">
       <img src="{{ url_for('static', filename='logo.png') }}" class="nav-logo-img" alt="Logo" onerror="this.style.display='none'; document.getElementById('nav-fallback-icon').style.display='inline-block';" />
       <span class="nav-logo" id="nav-fallback-icon" style="display:none;">🌌</span>
-      <span class="nav-title">MTG <span class="nav-title-glow">PRISM</span></span>
+      <span class="nav-title">MTG <span class="nav-title-glow">SORTING</span></span>
     </div>
     <div class="nav-links">
       <a href="/collection" class="nav-link {% if request.path == '/collection' %}active{% endif %}">
@@ -25,8 +25,8 @@
       <a href="/decks" class="nav-link {% if request.path == '/decks' %}active{% endif %}">
         <span class="nav-icon">🗂️</span> Decks
       </a>
-      <a href="/prism" class="nav-link {% if request.path in ['/prism', '/build'] %}active{% endif %}">
-        <span class="nav-icon">🎨</span> PRISM Builder
+      <a href="/sorting" class="nav-link {% if request.path in ['/sorting', '/build'] %}active{% endif %}">
+        <span class="nav-icon">🎨</span> SORTING Builder
       </a>
       <a href="/import" class="nav-link {% if request.path == '/import' %}active{% endif %}">
         <span class="nav-icon">⚡</span> Import

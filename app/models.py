@@ -94,9 +94,22 @@ class Deck(db.Model):
     cards = db.relationship('DeckCard', back_populates='deck',
                             cascade='all, delete-orphan', lazy='dynamic')
 
+    def expected_size(self):
+        """Standard deck size: 100 Commander/EDH, 40 Draft/Sealed, 60 most others."""
+        fmt = (self.format or '').strip().lower()
+        if not fmt or fmt.isdigit():
+            return None
+        if 'commander' in fmt or 'edh' in fmt:
+            return 100
+        if 'draft' in fmt or 'sealed' in fmt:
+            return 40
+        return 60
+
     def to_dict(self):
         total_qty = db.session.query(db.func.sum(DeckCard.quantity)).filter_by(deck_id=self.id).scalar() or 0
         unique_cnt = self.cards.count()
+        expected = self.expected_size()
+        size_ok = (expected is None) or (total_qty == expected)
         return {
             'id': self.id,
             'name': self.name,
@@ -105,6 +118,12 @@ class Deck(db.Model):
             'card_count': total_qty,
             'total_cards': total_qty,
             'unique_cards': unique_cnt,
+            'expected_size': expected,
+            'size_ok': size_ok,
+            'size_warning': (
+                None if size_ok or expected is None
+                else f"Deck has {total_qty} cards (expected {expected} for {self.format})"
+            ),
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
 

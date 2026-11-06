@@ -1,15 +1,15 @@
 /**
- * PRISM Sleeve Marking & Modular Deck Builder — Local Client Engine
- * Mirrors the functionality of https://prismmtg.com/build.html
+ * SORTING Sleeve Marking & Modular Deck Builder — Local Client Engine
+ * Local sleeve-marking tool for modular deck sorting.
  * Stores state in localStorage with 1-click sync to the local SQLite collection database.
  */
 
-const PRISM_STORAGE_KEY = 'prism_decks_data_v1';
-const PRISM_MARKED_KEY = 'prism_marked_cards_v1';
-const PRISM_NAME_KEY = 'prism_active_name_v1';
+const SORTING_STORAGE_KEY = 'sorting_decks_data_v1';
+const SORTING_MARKED_KEY = 'sorting_marked_cards_v1';
+const SORTING_NAME_KEY = 'sorting_active_name_v1';
 
-// Official PRISM Palette
-const PRISM_PALETTE = [
+// Official SORTING Palette
+const SORTING_PALETTE = [
   '#EEB41B', // Yellow
   '#E54D2E', // Orange-Red
   '#3E63DD', // Blue
@@ -22,10 +22,10 @@ const PRISM_PALETTE = [
   '#2B9A66', // Emerald
 ];
 
-let prismState = {
-  name: localStorage.getItem(PRISM_NAME_KEY) || 'My PRISM Container',
+let sortingState = {
+  name: localStorage.getItem(SORTING_NAME_KEY) || 'My SORTING Container',
   decks: [],
-  marked: JSON.parse(localStorage.getItem(PRISM_MARKED_KEY) || '{}'),
+  marked: JSON.parse(localStorage.getItem(SORTING_MARKED_KEY) || '{}'),
   activeTab: 'decks',
   activeFilter: 'all', // 'all', 'shared', 'undone'
   searchQuery: '',
@@ -33,43 +33,43 @@ let prismState = {
 };
 
 // ── Initialization ────────────────────────────────────────────────────────────
-function initPrismApp() {
-  loadPrismState();
-  bindPrismEvents();
-  renderPrismUI();
+function initSortingApp() {
+  loadSortingState();
+  bindSortingEvents();
+  renderSortingUI();
 }
 
-function loadPrismState() {
-  const savedDecks = localStorage.getItem(PRISM_STORAGE_KEY);
+function loadSortingState() {
+  const savedDecks = localStorage.getItem(SORTING_STORAGE_KEY);
   if (savedDecks) {
     try {
-      prismState.decks = JSON.parse(savedDecks);
+      sortingState.decks = JSON.parse(savedDecks);
     } catch (e) {
-      prismState.decks = [];
+      sortingState.decks = [];
     }
   }
 }
 
-function savePrismState() {
-  localStorage.setItem(PRISM_STORAGE_KEY, JSON.stringify(prismState.decks));
-  localStorage.setItem(PRISM_MARKED_KEY, JSON.stringify(prismState.marked));
-  localStorage.setItem(PRISM_NAME_KEY, prismState.name);
+function saveSortingState() {
+  localStorage.setItem(SORTING_STORAGE_KEY, JSON.stringify(sortingState.decks));
+  localStorage.setItem(SORTING_MARKED_KEY, JSON.stringify(sortingState.marked));
+  localStorage.setItem(SORTING_NAME_KEY, sortingState.name);
 }
 
 // ── Event Handlers ────────────────────────────────────────────────────────────
-function bindPrismEvents() {
+function bindSortingEvents() {
   // Title editing
-  const titleInput = document.getElementById('prism-title-input');
+  const titleInput = document.getElementById('sorting-title-input');
   if (titleInput) {
-    titleInput.value = prismState.name;
+    titleInput.value = sortingState.name;
     titleInput.addEventListener('input', (e) => {
-      prismState.name = e.target.value.trim() || 'My PRISM Container';
-      savePrismState();
+      sortingState.name = e.target.value.trim() || 'My SORTING Container';
+      saveSortingState();
     });
   }
 
   // Tabs
-  document.querySelectorAll('.prism-tab-btn').forEach((btn) => {
+  document.querySelectorAll('.sorting-tab-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const tab = btn.dataset.tab;
       switchTab(tab);
@@ -83,20 +83,20 @@ function bindPrismEvents() {
   }
 
   // Export & Import backup JSON
-  const btnExportJson = document.getElementById('btn-export-prism-json');
+  const btnExportJson = document.getElementById('btn-export-sorting-json');
   if (btnExportJson) {
-    btnExportJson.addEventListener('click', exportPrismBackup);
+    btnExportJson.addEventListener('click', exportSortingBackup);
   }
 
-  const btnImportJson = document.getElementById('btn-import-prism-json');
-  const fileInputJson = document.getElementById('prism-json-file-input');
+  const btnImportJson = document.getElementById('btn-import-sorting-json');
+  const fileInputJson = document.getElementById('sorting-json-file-input');
   if (btnImportJson && fileInputJson) {
     btnImportJson.addEventListener('click', () => fileInputJson.click());
-    fileInputJson.addEventListener('change', importPrismBackup);
+    fileInputJson.addEventListener('change', importSortingBackup);
   }
 
   // Add Deck Form
-  const addDeckForm = document.getElementById('prism-add-deck-form');
+  const addDeckForm = document.getElementById('sorting-add-deck-form');
   if (addDeckForm) {
     addDeckForm.addEventListener('submit', handleAddDeck);
   }
@@ -125,26 +125,26 @@ function bindPrismEvents() {
   }
 
   // Filters & Search
-  document.querySelectorAll('.prism-filter-btn').forEach((btn) => {
+  document.querySelectorAll('.sorting-filter-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.prism-filter-btn').forEach((b) => b.classList.remove('active'));
+      document.querySelectorAll('.sorting-filter-btn').forEach((b) => b.classList.remove('active'));
       btn.classList.add('active');
-      prismState.activeFilter = btn.dataset.filter;
+      sortingState.activeFilter = btn.dataset.filter;
       renderResults();
     });
   });
 
-  const searchInput = document.getElementById('prism-results-search');
+  const searchInput = document.getElementById('sorting-results-search');
   if (searchInput) {
     searchInput.addEventListener('input', (e) => {
-      prismState.searchQuery = e.target.value.toLowerCase().trim();
+      sortingState.searchQuery = e.target.value.toLowerCase().trim();
       renderResults();
     });
   }
 
   // Export CSV / Printable guide
-  const btnCsv = document.getElementById('btn-export-prism-csv');
-  if (btnCsv) btnCsv.addEventListener('click', exportPrismCSV);
+  const btnCsv = document.getElementById('btn-export-sorting-csv');
+  if (btnCsv) btnCsv.addEventListener('click', exportSortingCSV);
 
   const btnPrint = document.getElementById('btn-print-guide');
   if (btnPrint) btnPrint.addEventListener('click', () => window.print());
@@ -164,12 +164,12 @@ function bindPrismEvents() {
 }
 
 function switchTab(tabName) {
-  prismState.activeTab = tabName;
-  document.querySelectorAll('.prism-tab-btn').forEach((btn) => {
+  sortingState.activeTab = tabName;
+  document.querySelectorAll('.sorting-tab-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.tab === tabName);
   });
-  document.getElementById('prism-panel-decks')?.classList.toggle('hidden', tabName !== 'decks');
-  document.getElementById('prism-panel-results')?.classList.toggle('hidden', tabName !== 'results');
+  document.getElementById('sorting-panel-decks')?.classList.toggle('hidden', tabName !== 'decks');
+  document.getElementById('sorting-panel-results')?.classList.toggle('hidden', tabName !== 'results');
 
   if (tabName === 'results') {
     renderResults();
@@ -178,16 +178,16 @@ function switchTab(tabName) {
 
 // ── Color Swatches ────────────────────────────────────────────────────────────
 function renderColorSwatches() {
-  const container = document.getElementById('prism-swatches-container');
+  const container = document.getElementById('sorting-swatches-container');
   if (!container) return;
-  container.innerHTML = PRISM_PALETTE.map((color, idx) => `
-    <div class="prism-color-swatch ${idx === 0 ? 'active' : ''}"
+  container.innerHTML = SORTING_PALETTE.map((color, idx) => `
+    <div class="sorting-color-swatch ${idx === 0 ? 'active' : ''}"
          style="background: ${color};"
          data-color="${color}"
          title="${color}"></div>
   `).join('');
 
-  container.querySelectorAll('.prism-color-swatch').forEach((swatch) => {
+  container.querySelectorAll('.sorting-color-swatch').forEach((swatch) => {
     swatch.addEventListener('click', () => {
       selectSwatchColor(swatch.dataset.color);
     });
@@ -198,7 +198,7 @@ function selectSwatchColor(color) {
   const colorInput = document.getElementById('deck-color-input');
   if (colorInput) colorInput.value = color;
 
-  document.querySelectorAll('.prism-color-swatch').forEach((s) => {
+  document.querySelectorAll('.sorting-color-swatch').forEach((s) => {
     s.classList.toggle('active', s.dataset.color.toLowerCase() === color.toLowerCase());
   });
 }
@@ -209,7 +209,7 @@ async function loadDecksFromLocalDatabase() {
   if (btn) btn.textContent = '⏳ Loading from DB…';
 
   try {
-    const res = await fetch('/api/prism/sync-data');
+    const res = await fetch('/api/sorting/sync-data');
     if (!res.ok) throw new Error('Failed to fetch from server');
     const data = await res.json();
 
@@ -219,12 +219,12 @@ async function loadDecksFromLocalDatabase() {
     }
 
     // Merge or replace
-    const existingNames = new Set(prismState.decks.map((d) => d.name.toLowerCase()));
+    const existingNames = new Set(sortingState.decks.map((d) => d.name.toLowerCase()));
     let addedCount = 0;
 
     data.decks.forEach((importedDeck) => {
       if (!existingNames.has(importedDeck.name.toLowerCase())) {
-        prismState.decks.push({
+        sortingState.decks.push({
           id: 'deck_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
           name: importedDeck.name,
           commander: importedDeck.commander || '',
@@ -237,9 +237,9 @@ async function loadDecksFromLocalDatabase() {
       }
     });
 
-    savePrismState();
-    renderPrismUI();
-    alert(`Successfully loaded ${addedCount} deck(s) from your local collection into PRISM!`);
+    saveSortingState();
+    renderSortingUI();
+    alert(`Successfully loaded ${addedCount} deck(s) from your local collection into SORTING!`);
   } catch (err) {
     alert('Error loading decks: ' + err.message);
   } finally {
@@ -287,7 +287,7 @@ function handleAddDeck(e) {
 
   const name = nameInput.value.trim();
   const commander = commanderInput?.value.trim() || '';
-  const color = colorInput?.value || PRISM_PALETTE[prismState.decks.length % PRISM_PALETTE.length];
+  const color = colorInput?.value || SORTING_PALETTE[sortingState.decks.length % SORTING_PALETTE.length];
   const rawList = listInput.value.trim();
 
   if (!name || !rawList) {
@@ -307,15 +307,15 @@ function handleAddDeck(e) {
     cards: parsedCards,
   };
 
-  prismState.decks.push(newDeck);
-  savePrismState();
+  sortingState.decks.push(newDeck);
+  saveSortingState();
 
   // Reset form
   nameInput.value = '';
   if (commanderInput) commanderInput.value = '';
   listInput.value = '';
 
-  renderPrismUI();
+  renderSortingUI();
 }
 
 function handleDeckFileUpload(e) {
@@ -365,10 +365,10 @@ async function handleUrlImport() {
 }
 
 // ── Overlap & Slot Calculation ────────────────────────────────────────────────
-function computePrismCardData() {
+function computeSortingCardData() {
   const cardMap = new Map(); // cardName.toLowerCase() -> { name, quantity, deckIds: Set() }
 
-  prismState.decks.forEach((deck, deckIndex) => {
+  sortingState.decks.forEach((deck, deckIndex) => {
     deck.cards.forEach((c) => {
       const key = c.name.toLowerCase();
       if (!cardMap.has(key)) {
@@ -384,13 +384,13 @@ function computePrismCardData() {
 
   const cardsList = [];
   cardMap.forEach((val) => {
-    const decksUsing = prismState.decks.filter((d) => val.deckIds.has(d.id));
+    const decksUsing = sortingState.decks.filter((d) => val.deckIds.has(d.id));
     cardsList.push({
       name: val.name,
       isPool: decksUsing.length >= 2,
       deckCount: decksUsing.length,
       decks: decksUsing,
-      isMarked: !!prismState.marked[val.name.toLowerCase()],
+      isMarked: !!sortingState.marked[val.name.toLowerCase()],
     });
   });
 
@@ -405,28 +405,28 @@ function computePrismCardData() {
 }
 
 // ── UI Rendering ──────────────────────────────────────────────────────────────
-function renderPrismUI() {
+function renderSortingUI() {
   renderDecksList();
   renderResults();
   updateHeaderDeckCount();
 }
 
 function updateHeaderDeckCount() {
-  const tag = document.getElementById('prism-deck-count-badge');
+  const tag = document.getElementById('sorting-deck-count-badge');
   if (tag) {
-    const count = prismState.decks.length;
+    const count = sortingState.decks.length;
     tag.textContent = `${count} deck${count !== 1 ? 's' : ''}`;
   }
 }
 
 function renderDecksList() {
-  const container = document.getElementById('prism-decks-list');
+  const container = document.getElementById('sorting-decks-list');
   if (!container) return;
 
-  if (prismState.decks.length === 0) {
+  if (sortingState.decks.length === 0) {
     container.innerHTML = `
       <div style="text-align: center; padding: 2.5rem; background: var(--bg-card); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1);">
-        <p style="color: var(--text-muted); font-size: 1.1rem; margin-bottom: 1rem;">No decks in this PRISM yet.</p>
+        <p style="color: var(--text-muted); font-size: 1.1rem; margin-bottom: 1rem;">No decks in this SORTING yet.</p>
         <button class="btn btn-primary btn-sm" onclick="loadDecksFromLocalDatabase()">
           📥 Import Decks from Local Database
         </button>
@@ -436,23 +436,23 @@ function renderDecksList() {
   }
 
   container.innerHTML = `
-    <div class="prism-deck-grid">
-      ${prismState.decks.map((deck, idx) => `
-        <div class="prism-deck-card" style="--deck-color: ${deck.color};">
-          <div class="prism-deck-card-header">
-            <span class="prism-deck-name">${escapeHtml(deck.name)}</span>
+    <div class="sorting-deck-grid">
+      ${sortingState.decks.map((deck, idx) => `
+        <div class="sorting-deck-card" style="--deck-color: ${deck.color};">
+          <div class="sorting-deck-card-header">
+            <span class="sorting-deck-name">${escapeHtml(deck.name)}</span>
             <span style="display:inline-block; width:14px; height:14px; border-radius:50%; background:${deck.color}; box-shadow:0 0 6px ${deck.color};"></span>
           </div>
-          <div class="prism-deck-commander">
+          <div class="sorting-deck-commander">
             <span>👑 ${escapeHtml(deck.commander || 'No commander listed')}</span>
           </div>
-          <div class="prism-deck-meta">
+          <div class="sorting-deck-meta">
             <span>Slot: Side A · Slot ${idx + 1}</span>
             <span>•</span>
             <span>${deck.cards ? deck.cards.length : 0} cards</span>
           </div>
-          <div class="prism-deck-actions">
-            <button class="btn btn-danger btn-sm" onclick="deletePrismDeck('${deck.id}')">Delete</button>
+          <div class="sorting-deck-actions">
+            <button class="btn btn-danger btn-sm" onclick="deleteSortingDeck('${deck.id}')">Delete</button>
           </div>
         </div>
       `).join('')}
@@ -460,32 +460,32 @@ function renderDecksList() {
   `;
 }
 
-function deletePrismDeck(deckId) {
-  if (!confirm('Are you sure you want to remove this deck from PRISM?')) return;
-  prismState.decks = prismState.decks.filter((d) => d.id !== deckId);
-  savePrismState();
-  renderPrismUI();
+function deleteSortingDeck(deckId) {
+  if (!confirm('Are you sure you want to remove this deck from SORTING?')) return;
+  sortingState.decks = sortingState.decks.filter((d) => d.id !== deckId);
+  saveSortingState();
+  renderSortingUI();
 }
 
 function renderResults() {
-  const cards = computePrismCardData();
+  const cards = computeSortingCardData();
 
   // Filter
   let filtered = cards;
-  if (prismState.activeFilter === 'shared') {
+  if (sortingState.activeFilter === 'shared') {
     filtered = filtered.filter((c) => c.isPool);
-  } else if (prismState.activeFilter === 'undone') {
+  } else if (sortingState.activeFilter === 'undone') {
     filtered = filtered.filter((c) => !c.isMarked);
   }
 
-  if (prismState.searchQuery) {
-    filtered = filtered.filter((c) => c.name.toLowerCase().includes(prismState.searchQuery));
+  if (sortingState.searchQuery) {
+    filtered = filtered.filter((c) => c.name.toLowerCase().includes(sortingState.searchQuery));
   }
 
   // Update Stats
-  const statTotal = document.getElementById('stat-prism-total');
-  const statShared = document.getElementById('stat-prism-shared');
-  const statMarked = document.getElementById('stat-prism-marked');
+  const statTotal = document.getElementById('stat-sorting-total');
+  const statShared = document.getElementById('stat-sorting-shared');
+  const statMarked = document.getElementById('stat-sorting-marked');
 
   const totalCards = cards.length;
   const poolCards = cards.filter((c) => c.isPool).length;
@@ -499,7 +499,7 @@ function renderResults() {
   renderOverlapMatrix();
 
   // Render Table
-  const tbody = document.getElementById('prism-results-tbody');
+  const tbody = document.getElementById('sorting-results-tbody');
   if (!tbody) return;
 
   if (filtered.length === 0) {
@@ -509,10 +509,10 @@ function renderResults() {
 
   tbody.innerHTML = filtered.map((card) => {
     const key = card.name.toLowerCase();
-    const isDone = !!prismState.marked[key];
+    const isDone = !!sortingState.marked[key];
 
     // Build sleeve preview
-    const sleeveSlotsHtml = prismState.decks.map((deck) => {
+    const sleeveSlotsHtml = sortingState.decks.map((deck) => {
       const active = card.decks.some((d) => d.id === deck.id);
       return `<div class="sleeve-slot ${active ? 'active' : ''}" style="${active ? `background:${deck.color}; box-shadow: 0 0 6px ${deck.color};` : ''}" title="${deck.name}"></div>`;
     }).join('');
@@ -531,7 +531,7 @@ function renderResults() {
         <td>
           <div class="card-name-text" style="font-weight: 600; font-size: 0.95rem;">
             ${escapeHtml(card.name)}
-            ${card.isPool ? '<span class="badge badge-prism" style="margin-left: 6px;">⚡ Pool</span>' : ''}
+            ${card.isPool ? '<span class="badge badge-sorting" style="margin-left: 6px;">⚡ Pool</span>' : ''}
           </div>
           <div style="margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap;">
             ${deckBadges}
@@ -548,24 +548,24 @@ function renderResults() {
 function toggleCardMarked(cardName, isChecked) {
   const key = cardName.toLowerCase();
   if (isChecked) {
-    prismState.marked[key] = true;
+    sortingState.marked[key] = true;
   } else {
-    delete prismState.marked[key];
+    delete sortingState.marked[key];
   }
-  savePrismState();
+  saveSortingState();
   renderResults();
 }
 
 // ── Overlap Matrix ────────────────────────────────────────────────────────────
 function renderOverlapMatrix() {
-  const container = document.getElementById('prism-overlap-matrix');
-  if (!container || prismState.decks.length < 2) {
+  const container = document.getElementById('sorting-overlap-matrix');
+  if (!container || sortingState.decks.length < 2) {
     if (container) container.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Add 2 or more decks to calculate the overlap matrix.</p>';
     return;
   }
 
-  const decks = prismState.decks;
-  let html = '<table class="prism-matrix-table"><thead><tr><th>Deck</th>';
+  const decks = sortingState.decks;
+  let html = '<table class="sorting-matrix-table"><thead><tr><th>Deck</th>';
 
   decks.forEach((d) => {
     html += `<th><span style="color:${d.color}">●</span> ${escapeHtml(d.name)}</th>`;
@@ -581,7 +581,7 @@ function renderOverlapMatrix() {
         html += `<td style="color: var(--text-dim); background: rgba(0,0,0,0.2);">${d1.cards.length}</td>`;
       } else {
         const shared = d2.cards.filter((c) => d1Cards.has(c.name.toLowerCase())).length;
-        html += `<td class="${shared > 0 ? 'prism-matrix-cell-shared' : ''}">${shared}</td>`;
+        html += `<td class="${shared > 0 ? 'sorting-matrix-cell-shared' : ''}">${shared}</td>`;
       }
     });
     html += '</tr>';
@@ -592,24 +592,24 @@ function renderOverlapMatrix() {
 }
 
 // ── Export Features ───────────────────────────────────────────────────────────
-function exportPrismBackup() {
+function exportSortingBackup() {
   const backup = {
     version: '1.0',
     date: new Date().toISOString(),
-    name: prismState.name,
-    decks: prismState.decks,
-    marked: prismState.marked,
+    name: sortingState.name,
+    decks: sortingState.decks,
+    marked: sortingState.marked,
   };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `prism-backup-${Date.now()}.json`;
+  a.download = `sorting-backup-${Date.now()}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
-function importPrismBackup(e) {
+function importSortingBackup(e) {
   const file = e.target.files[0];
   if (!file) return;
 
@@ -618,14 +618,14 @@ function importPrismBackup(e) {
     try {
       const data = JSON.parse(event.target.result);
       if (data.decks && Array.isArray(data.decks)) {
-        prismState.decks = data.decks;
-        prismState.name = data.name || prismState.name;
-        prismState.marked = data.marked || {};
-        savePrismState();
-        renderPrismUI();
-        alert('PRISM backup restored successfully!');
+        sortingState.decks = data.decks;
+        sortingState.name = data.name || sortingState.name;
+        sortingState.marked = data.marked || {};
+        saveSortingState();
+        renderSortingUI();
+        alert('SORTING backup restored successfully!');
       } else {
-        alert('Invalid PRISM JSON file format.');
+        alert('Invalid SORTING JSON file format.');
       }
     } catch (err) {
       alert('Error parsing JSON: ' + err.message);
@@ -634,8 +634,8 @@ function importPrismBackup(e) {
   reader.readAsText(file);
 }
 
-function exportPrismCSV() {
-  const cards = computePrismCardData();
+function exportSortingCSV() {
+  const cards = computeSortingCardData();
   let csv = 'Card Name,Type,Decks Count,Decks,Marked\n';
   cards.forEach((c) => {
     const deckNames = c.decks.map((d) => d.name).join('; ');
@@ -646,23 +646,23 @@ function exportPrismCSV() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `prism-marking-guide.csv`;
+  a.download = `sorting-marking-guide.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
 // ── SCRY-Mode ─────────────────────────────────────────────────────────────────
 function launchScryMode() {
-  const cards = computePrismCardData();
+  const cards = computeSortingCardData();
   if (cards.length === 0) {
     alert('No cards available to mark.');
     return;
   }
-  prismState.scryCards = cards.filter((c) => !c.isMarked);
-  if (prismState.scryCards.length === 0) {
-    prismState.scryCards = cards; // fall back to all if all marked
+  sortingState.scryCards = cards.filter((c) => !c.isMarked);
+  if (sortingState.scryCards.length === 0) {
+    sortingState.scryCards = cards; // fall back to all if all marked
   }
-  prismState.scryIndex = 0;
+  sortingState.scryIndex = 0;
 
   const overlay = document.getElementById('scry-mode-overlay');
   if (overlay) {
@@ -677,7 +677,7 @@ function closeScryMode() {
 }
 
 function renderScryCard() {
-  const card = prismState.scryCards[prismState.scryIndex];
+  const card = sortingState.scryCards[sortingState.scryIndex];
   if (!card) {
     closeScryMode();
     alert('Marking session complete!');
@@ -689,10 +689,10 @@ function renderScryCard() {
   const stripesEl = document.getElementById('scry-stripes-display');
 
   if (nameEl) nameEl.textContent = card.name;
-  if (progressEl) progressEl.textContent = `Card ${prismState.scryIndex + 1} of ${prismState.scryCards.length}`;
+  if (progressEl) progressEl.textContent = `Card ${sortingState.scryIndex + 1} of ${sortingState.scryCards.length}`;
 
   if (stripesEl) {
-    stripesEl.innerHTML = prismState.decks.map((deck) => {
+    stripesEl.innerHTML = sortingState.decks.map((deck) => {
       const active = card.decks.some((d) => d.id === deck.id);
       return `
         <div style="display:flex; flex-direction:column; align-items:center; gap: 0.5rem;">
@@ -705,17 +705,17 @@ function renderScryCard() {
 }
 
 function handleScryDone() {
-  const card = prismState.scryCards[prismState.scryIndex];
+  const card = sortingState.scryCards[sortingState.scryIndex];
   if (card) {
-    prismState.marked[card.name.toLowerCase()] = true;
-    savePrismState();
+    sortingState.marked[card.name.toLowerCase()] = true;
+    saveSortingState();
   }
-  prismState.scryIndex++;
+  sortingState.scryIndex++;
   renderScryCard();
 }
 
 function handleScrySkip() {
-  prismState.scryIndex++;
+  sortingState.scryIndex++;
   renderScryCard();
 }
 
@@ -732,7 +732,7 @@ function escapeJs(str) {
 
 // Auto-run if container present
 document.addEventListener('DOMContentLoaded', () => {
-  if (document.getElementById('prism-builder-container')) {
-    initPrismApp();
+  if (document.getElementById('sorting-builder-container')) {
+    initSortingApp();
   }
 });

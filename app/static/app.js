@@ -134,6 +134,11 @@ function renderCardModal(card, scryfallCard) {
   const ch = mp.cardhoarder || {};
   const rateStr = mp.rate_usd_cad ? `1 USD = C$${mp.rate_usd_cad.toFixed(2)} CAD` : 'CAD conversion active';
 
+  // Printings grouped by name (same card, different sets/foil/boxes)
+  const printings = Array.isArray(card.printings) ? card.printings : [];
+  const printingsCount = card.printings_count || printings.length || 1;
+  const totalQty = card.quantity || 1;
+
   // Build image section
   let imageSectionHtml = '';
   if (card.image_uri_back) {
@@ -151,6 +156,39 @@ function renderCardModal(card, scryfallCard) {
     imageSectionHtml = `<div class="modal-image" style="background:var(--bg-elevated);border-radius:var(--radius-sm);aspect-ratio:63/88;display:flex;align-items:center;justify-content:center;color:var(--text-dim);">No image</div>`;
   }
 
+  const printingsHtml = (card.id && printings.length > 0) ? `
+    <div style="margin-top:1rem;background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:1rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;flex-wrap:wrap;gap:0.4rem;">
+        <div style="font-weight:700;color:#fff;">📚 Printings — ×${totalQty} total${printingsCount > 1 ? ` (${printingsCount} printings)` : ''}</div>
+        <span class="badge badge-set">${escHtml((card.sets || []).join(' + ') || setCode || '—')}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:0.5rem;">
+        ${printings.map((p, idx) => `
+          <div class="printing-row" data-printing-id="${p.id}" style="display:grid;grid-template-columns:70px 1fr 90px 110px auto;gap:0.5rem;align-items:center;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:0.5rem 0.6rem;">
+            <span class="badge badge-set" title="Set • Collector #">${escHtml(p.set_code || '—')}${p.collector_number ? ' #' + escHtml(p.collector_number) : ''}</span>
+            <span style="font-size:0.82rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(p.storage_location || '')}">${p.foil ? '✦ Foil • ' : ''}${escHtml(p.storage_location || 'Binder')}</span>
+            <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.78rem;color:var(--text-dim);">Qty
+              <input type="number" class="filter-input printing-qty" data-id="${p.id}" value="${p.quantity}" min="0" style="width:60px;padding:0.25rem 0.4rem;" />
+            </label>
+            <select class="filter-select printing-foil" data-id="${p.id}" style="padding:0.25rem 0.4rem;font-size:0.8rem;">
+              <option value="false" ${!p.foil ? 'selected' : ''}>Non-foil</option>
+              <option value="true" ${p.foil ? 'selected' : ''}>Foil ✦</option>
+            </select>
+            <button class="btn btn-ghost btn-sm printing-delete" data-id="${p.id}" title="Remove this printing">✕</button>
+          </div>
+        `).join('')}
+      </div>
+      <div style="margin-top:0.6rem;">
+        <label class="form-label">Storage Location for all printings →</label>
+        <div style="display:flex;gap:0.5rem;margin-top:0.3rem;">
+          <input type="text" class="filter-input" id="edit-storage-all" placeholder="e.g. SORTING Tray — leave blank to keep per-printing boxes" style="flex:1;" />
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-apply-storage-all">Apply to all</button>
+        </div>
+        <p style="font-size:0.75rem;color:var(--text-dim);margin-top:0.4rem;">Per-printing qty/foil is saved with “Save Changes”. Deleting a printing removes only that set/foil copy; when the last copy is gone the card is also removed from decks.</p>
+      </div>
+    </div>
+  ` : '';
+
   modalInner.innerHTML = `
     <div class="modal-layout">
       ${imageSectionHtml}
@@ -159,13 +197,14 @@ function renderCardModal(card, scryfallCard) {
           <div class="modal-name">${escHtml(name)}</div>
           <div class="modal-type">${escHtml(typeLine)}</div>
           ${manaCost ? `<div class="modal-mana">${formatManaCost(manaCost)}</div>` : ''}
+          ${printingsCount > 1 ? `<div style="margin-top:0.4rem;"><span class="badge badge-qty">×${totalQty} • ${printingsCount} printings</span></div>` : ``}
         </div>
         ${oracleText ? `<div class="modal-text">${escHtml(oracleText)}</div>` : ''}
         
         <div class="modal-meta-grid">
           <div class="modal-meta-item">
-            <div class="modal-meta-label">Set</div>
-            <div class="modal-meta-value">${escHtml(setName)} (${escHtml(setCode)})</div>
+            <div class="modal-meta-label">Set(s)</div>
+            <div class="modal-meta-value">${escHtml((card.sets || []).join(', ') || (setName ? `${setName} (${setCode})` : setCode))}</div>
           </div>
           <div class="modal-meta-item">
             <div class="modal-meta-label">Rarity</div>
@@ -231,8 +270,10 @@ function renderCardModal(card, scryfallCard) {
       </div>
     </div>
 
+    ${printingsHtml}
+
     <!-- Edit section (only shown for collection cards with an id) -->
-    ${card.id ? `
+    ${card.id && printings.length === 0 ? `
     <div class="modal-edit-form" id="modal-edit-form" style="margin-top: 1rem;">
       <div class="form-group">
         <label class="form-label">Quantity</label>
@@ -246,10 +287,10 @@ function renderCardModal(card, scryfallCard) {
           <option value="true"  ${card.foil  ? 'selected' : ''}>Foil</option>
         </select>
       </div>
-      <div class="form-group" style="grid-column: span 2;">
+      <div class="form-group">
         <label class="form-label">Storage Location / Box</label>
         <input type="text" class="filter-input" id="edit-storage"
-               value="${escHtml(card.storage_location || '')}" placeholder="e.g. PRISM Tray, Binder A, Commander Box" />
+               value="${escHtml(card.storage_location || '')}" placeholder="e.g. SORTING Tray, Binder A, Commander Box" />
       </div>
     </div>
     ` : ''}
@@ -269,32 +310,118 @@ function renderCardModal(card, scryfallCard) {
 
   // Wire up buttons
   if (card.id) {
-    document.getElementById('btn-save-card').addEventListener('click', async () => {
-      const payload = {
-        quantity: parseInt(document.getElementById('edit-qty').value, 10),
-        condition: 'NM', // Quality/condition simplified to NM
-        foil: document.getElementById('edit-foil').value === 'true',
-        storage_location: document.getElementById('edit-storage').value,
-      };
+    const saveBtn = document.getElementById('btn-save-card');
+    if (saveBtn) saveBtn.addEventListener('click', async () => {
       try {
-        await apiFetch(`/api/collection/${card.id}`, {
-          method: 'PUT',
-          body: JSON.stringify(payload),
-        });
+        if (printings.length > 0) {
+          // Save each printing individually
+          const rows = modalInner.querySelectorAll('.printing-row');
+          for (const row of rows) {
+            const pid = row.dataset.printingId;
+            const qtyEl = row.querySelector('.printing-qty');
+            const foilEl = row.querySelector('.printing-foil');
+            const qty = parseInt(qtyEl.value, 10);
+            const foil = foilEl.value === 'true';
+            if (isNaN(qty) || qty < 0) continue;
+            if (qty === 0) {
+              await apiFetch(`/api/collection/${pid}`, { method: 'DELETE' });
+            } else {
+              await apiFetch(`/api/collection/${pid}`, {
+                method: 'PUT',
+                body: JSON.stringify({ quantity: qty, foil }),
+              });
+            }
+          }
+          const applyAll = document.getElementById('edit-storage-all');
+          if (applyAll && applyAll.value.trim()) {
+            const loc = applyAll.value.trim();
+            for (const row of rows) {
+              const pid = row.dataset.printingId;
+              // Only update if printing still exists (qty > 0)
+              await apiFetch(`/api/collection/${pid}`, {
+                method: 'PUT',
+                body: JSON.stringify({ storage_location: loc }),
+              }).catch(() => {});
+            }
+          }
+        } else {
+          const payload = {
+            quantity: parseInt(document.getElementById('edit-qty').value, 10),
+            foil: document.getElementById('edit-foil').value === 'true',
+            storage_location: document.getElementById('edit-storage').value,
+          };
+          await apiFetch(`/api/collection/${card.id}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+          });
+        }
         closeModal();
         if (typeof loadCollection === 'function') loadCollection();
         loadNavStats();
       } catch (e) { alert('Error saving: ' + e.message); }
     });
 
-    document.getElementById('btn-delete-card').addEventListener('click', async () => {
-      if (!confirm(`Remove "${name}" from your collection?`)) return;
+    const delBtn = document.getElementById('btn-delete-card');
+    if (delBtn) delBtn.addEventListener('click', async () => {
+      const msg = printings.length > 1
+        ? `Remove all ${printingsCount} printings of "${name}" from your collection? The card will also be removed from decks.`
+        : `Remove "${name}" from your collection? If this is the last copy, it will also be removed from decks.`;
+      if (!confirm(msg)) return;
       try {
-        await apiFetch(`/api/collection/${card.id}`, { method: 'DELETE' });
+        if (printings.length > 0) {
+          let removedFromDecks = 0;
+          for (const p of [...printings].sort((a,b) => a.id - b.id)) {
+            const res = await apiFetch(`/api/collection/${p.id}`, { method: 'DELETE' });
+            if (res.removed_from_decks) removedFromDecks += res.removed_from_decks;
+          }
+          if (removedFromDecks > 0) alert(`Removed from ${removedFromDecks} deck slot(s) as well.`);
+        } else {
+          const res = await apiFetch(`/api/collection/${card.id}`, { method: 'DELETE' });
+          if (res.removed_from_decks) alert(`Removed from ${res.removed_from_decks} deck slot(s) as well.`);
+        }
         closeModal();
         if (typeof loadCollection === 'function') loadCollection();
         loadNavStats();
       } catch (e) { alert('Error deleting: ' + e.message); }
+    });
+
+    // Per-printing delete (removes just that set/foil row; last copy clears decks)
+    modalInner.querySelectorAll('.printing-delete').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const pid = btn.dataset.id;
+        const printing = printings.find(p => String(p.id) === String(pid));
+        const label = printing ? `${printing.set_code || ''} ${printing.foil ? 'foil' : ''}`.trim() : 'this printing';
+        if (!confirm(`Remove ${label} copy from collection?`)) return;
+        try {
+          const res = await apiFetch(`/api/collection/${pid}`, { method: 'DELETE' });
+          const row = btn.closest('.printing-row');
+          if (res.removed_from_decks) {
+            alert(`Last copy removed — also removed from ${res.removed_from_decks} deck slot(s).`);
+            closeModal();
+            if (typeof loadCollection === 'function') loadCollection();
+            loadNavStats();
+          } else {
+            if (row) row.remove();
+          }
+        } catch (e) { alert('Error deleting printing: ' + e.message); }
+      });
+    });
+
+    const applyBtn = document.getElementById('btn-apply-storage-all');
+    if (applyBtn) applyBtn.addEventListener('click', async () => {
+      const loc = document.getElementById('edit-storage-all').value.trim();
+      if (!loc) { alert('Enter a storage location first.'); return; }
+      try {
+        for (const p of printings) {
+          await apiFetch(`/api/collection/${p.id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ storage_location: loc }),
+          });
+        }
+        closeModal();
+        if (typeof loadCollection === 'function') loadCollection();
+        loadNavStats();
+      } catch (e) { alert('Error updating storage: ' + e.message); }
     });
   }
 }
@@ -332,8 +459,8 @@ async function populateDeckFilter() {
 
     let html = `
       <option value="">All Decks, Boxes &amp; Pool</option>
-      <optgroup label="PRISM System">
-        <option value="shared">⚡ PRISM Shared (2+ decks)</option>
+      <optgroup label="SORTING System">
+        <option value="shared">⚡ SORTING Shared (2+ decks)</option>
         <option value="unassigned">📦 Binder / Unassigned</option>
       </optgroup>
     `;
@@ -487,7 +614,7 @@ function renderGrid(data) {
       const decks = card.decks || [];
       let deckBadges = '';
       if (decks.length >= 2) {
-        deckBadges += `<span class="badge badge-prism" title="PRISM Shared staple in ${decks.length} decks">⚡ PRISM (${decks.length})</span> `;
+        deckBadges += `<span class="badge badge-sorting" title="SORTING Shared staple in ${decks.length} decks">⚡ SORTING (${decks.length})</span> `;
       }
       if (decks.length > 0) {
         deckBadges += decks.map(d => `<span class="badge badge-storage" title="Assigned to ${escHtml(d.name)}">🗂️ ${escHtml(d.name)}</span>`).join(' ');
@@ -497,21 +624,28 @@ function renderGrid(data) {
         deckBadges += `<span class="badge badge-storage" style="opacity:0.4;">📦 Binder</span>`;
       }
 
+      const setsTxt = (card.sets && card.sets.length) ? card.sets.join(' + ') : (card.set_code || '—');
+      const printingsCount = card.printings_count || 1;
+      const printingsBadge = printingsCount > 1
+        ? `<span class="badge badge-printings" title="${printingsCount} printings: ${escHtml(setsTxt)}">${printingsCount} printings</span>`
+        : '';
+
       return `
         <tr data-id="${card.id}" title="Click to view full card rulings and market pricing breakdown">
           <td class="text-center"><span class="badge badge-qty">×${card.quantity}</span></td>
           <td>
-            <div class="table-card-name">
-              ${escHtml(card.name)}
+            <div class="table-card-name" title="${escHtml(card.name)}">
+              <span class="table-card-name-text">${escHtml(card.name)}</span>
               ${card.foil ? '<span class="badge badge-foil" title="Foil">✦</span>' : ''}
+              ${printingsBadge}
             </div>
           </td>
           <td><span class="table-mana">${formatManaCost(card.mana_cost)}</span></td>
-          <td><span class="table-type" title="${escHtml(card.type_line || '')}">${escHtml(card.type_line || '—')}</span></td>
-          <td class="text-center"><span class="badge badge-set">${escHtml(card.set_code || '—')}</span></td>
+          <td class="col-type-td"><span class="table-type" title="${escHtml(card.type_line || '')}">${escHtml(card.type_line || '—')}</span></td>
+          <td class="text-center"><span class="badge badge-set">${escHtml(setsTxt)}</span></td>
           <td class="text-center"><span class="badge badge-rarity rarity-${card.rarity}">${capitalize(card.rarity || '—')}</span></td>
-          <td class="text-center">${card.foil ? '<span class="badge badge-foil">Foil</span>' : '<span style="color:var(--text-dim);">—</span>'}</td>
-          <td><span class="badge badge-storage">${escHtml(card.storage_location || 'Binder')}</span></td>
+          <td class="text-center col-foil">${card.foil ? '<span class="badge badge-foil">Foil</span>' : '<span style="color:var(--text-dim);">—</span>'}</td>
+          <td class="col-storage"><span class="badge badge-storage">${escHtml(card.storage_location || 'Binder')}</span></td>
           <td><div class="table-decks-cell">${deckBadges}</div></td>
           <td class="table-price" style="text-align:right; font-family:var(--font-mono);">${card.price_usd_fmt || '—'}</td>
           <td class="table-price" style="text-align:right; font-family:var(--font-mono); color:var(--gold); font-weight:600;">${card.price_cad_fmt || '—'}</td>
@@ -532,7 +666,8 @@ function renderGrid(data) {
   if (grid) {
     grid.innerHTML = data.cards.map(card => {
       const decks = card.decks || [];
-      const isPrism = decks.length >= 2;
+      const isSorting = decks.length >= 2;
+      const printingsCount = card.printings_count || 1;
       return `
         <div class="card-tile" data-id="${card.id}" title="${escHtml(card.name)}">
           <img src="${card.image_uri || ''}"
@@ -549,10 +684,11 @@ function renderGrid(data) {
             </div>
             <div class="card-tile-meta">
               <span class="badge badge-qty">×${card.quantity}</span>
+              ${printingsCount > 1 ? `<span class="badge badge-printings" title="${printingsCount} printings: ${escHtml((card.sets || []).join(' + '))}">${printingsCount} printings</span>` : ``}
               ${card.foil ? '<span class="badge badge-foil">✦ Foil</span>' : ''}
               ${card.set_code ? `<span class="badge badge-set">${escHtml(card.set_code)}</span>` : ''}
               ${card.rarity ? `<span class="badge badge-rarity rarity-${card.rarity}">${card.rarity[0].toUpperCase()}</span>` : ''}
-              ${isPrism ? `<span class="badge badge-prism" title="PRISM Shared staple in ${decks.length} decks">⚡ PRISM (${decks.length})</span>` : ''}
+              ${isSorting ? `<span class="badge badge-sorting" title="SORTING Shared staple in ${decks.length} decks">⚡ SORTING (${decks.length})</span>` : ''}
             </div>
             <div class="card-tile-price" style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; padding-top:4px; border-top:1px solid rgba(255,255,255,0.08); font-family:var(--font-mono); font-size:0.8rem;">
               <span style="color:#fff;">${card.price_usd_fmt || '—'}</span>
@@ -628,13 +764,15 @@ function initImportPage() {
     result.classList.add('hidden');
 
     try {
+      const condEl = document.getElementById('col-condition');
+      const priceEl = document.getElementById('col-price');
       const data = await apiFetch('/api/import/collection', {
         method: 'POST',
         body: JSON.stringify({
           text,
-          condition: document.getElementById('col-condition').value,
+          condition: condEl ? condEl.value : 'NM',
           storage:   document.getElementById('col-storage').value,
-          purchase_price: parseFloat(document.getElementById('col-price').value) || null,
+          purchase_price: priceEl ? (parseFloat(priceEl.value) || null) : null,
         }),
       });
       const errList = data.errors.length
@@ -706,9 +844,172 @@ function showResult(el, type, html) {
 }
 
 // ── Decks page ────────────────────────────────────────────────────────────────
+let currentDeckId = null;
+let currentDeck = null;
+let deckSearchDebounce = null;
+
+function expectedDeckSize(format, totalQty) {
+  const fmt = (format || '').trim().toLowerCase();
+  if (!fmt || /^\d+$/.test(fmt)) return { expected: null, ok: true, warning: null };
+  let expected = 60;
+  if (fmt.includes('commander') || fmt.includes('edh')) expected = 100;
+  else if (fmt.includes('draft') || fmt.includes('sealed')) expected = 40;
+  const ok = totalQty === expected;
+  return {
+    expected,
+    ok,
+    warning: ok ? null : `Deck has ${totalQty} cards (expected ${expected} for ${format || 'format'})`,
+  };
+}
+
 function initDecksPage() {
   loadNavStats();
   loadDeckList();
+
+  const backBtn = document.getElementById('deck-panel-back');
+  if (backBtn) backBtn.addEventListener('click', closeDeckPanel);
+
+  const editBtn = document.getElementById('btn-edit-deck');
+  if (editBtn) editBtn.addEventListener('click', openDeckEditModal);
+
+  const editClose = document.getElementById('deck-edit-modal-close');
+  if (editClose) editClose.addEventListener('click', closeDeckEditModal);
+  const editCancel = document.getElementById('btn-cancel-deck-edit');
+  if (editCancel) editCancel.addEventListener('click', closeDeckEditModal);
+  const editModal = document.getElementById('deck-edit-modal');
+  if (editModal) editModal.addEventListener('click', (e) => { if (e.target === editModal) closeDeckEditModal(); });
+
+  const editForm = document.getElementById('deck-edit-form');
+  if (editForm) editForm.addEventListener('submit', saveDeckEdit);
+
+  const toggleAdd = document.getElementById('btn-toggle-add-card');
+  if (toggleAdd) toggleAdd.addEventListener('click', toggleAddCardPanel);
+  const closeAdd = document.getElementById('btn-close-add-card');
+  if (closeAdd) closeAdd.addEventListener('click', toggleAddCardPanel);
+
+  const searchInput = document.getElementById('deck-card-search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      clearTimeout(deckSearchDebounce);
+      deckSearchDebounce = setTimeout(searchCollectionForDeck, 300);
+    });
+  }
+}
+
+function toggleAddCardPanel() {
+  const panel = document.getElementById('deck-add-card-panel');
+  if (!panel) return;
+  panel.classList.toggle('hidden');
+  if (!panel.classList.contains('hidden')) {
+    const input = document.getElementById('deck-card-search-input');
+    if (input) input.focus();
+  } else {
+    const results = document.getElementById('deck-card-search-results');
+    if (results) { results.innerHTML = ''; results.classList.add('hidden'); }
+  }
+}
+
+async function searchCollectionForDeck() {
+  const input = document.getElementById('deck-card-search-input');
+  const resultsEl = document.getElementById('deck-card-search-results');
+  const q = (input?.value || '').trim();
+  if (!q || q.length < 2 || !currentDeckId) {
+    if (resultsEl) { resultsEl.innerHTML = ''; resultsEl.classList.add('hidden'); }
+    return;
+  }
+  try {
+    const results = await apiFetch(`/api/collection/search?q=${encodeURIComponent(q)}`);
+    if (!results.length) {
+      resultsEl.innerHTML = `<div style="padding:0.75rem;color:var(--text-muted);font-size:0.85rem;">No collection cards match "${escHtml(q)}".</div>`;
+      resultsEl.classList.remove('hidden');
+      return;
+    }
+    resultsEl.innerHTML = results.map(r => `
+      <div class="search-result-item">
+        <div style="display:flex;align-items:center;gap:0.6rem;min-width:0;flex:1;">
+          ${r.image_uri ? `<img src="${r.image_uri}" style="width:30px;height:42px;object-fit:cover;border-radius:3px;flex-shrink:0;" loading="lazy" />` : ''}
+          <div style="min-width:0;">
+            <div style="font-weight:700;color:#fff;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(r.name)}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);font-family:var(--font-mono);">${escHtml(r.type_line || '')} • ${escHtml(r.set_code || '')} • Owned ×${r.total_owned}</div>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" data-add-card="${escHtml(r.name)}">➕ Add</button>
+      </div>
+    `).join('');
+    resultsEl.classList.remove('hidden');
+    resultsEl.querySelectorAll('[data-add-card]').forEach(btn => {
+      btn.addEventListener('click', () => addCardToDeck(btn.dataset.addCard));
+    });
+  } catch (e) {
+    if (resultsEl) resultsEl.innerHTML = `<div style="padding:0.75rem;color:var(--pink);">Search failed: ${escHtml(e.message)}</div>`;
+  }
+}
+
+async function addCardToDeck(cardName) {
+  if (!currentDeckId) return;
+  const slotEl = document.getElementById('deck-card-target-slot');
+  const qtyEl = document.getElementById('deck-card-target-qty');
+  const slot = slotEl ? slotEl.value : 'mainboard';
+  const qty = Math.max(1, parseInt(qtyEl?.value || '1', 10) || 1);
+  try {
+    await apiFetch(`/api/decks/${currentDeckId}/cards`, {
+      method: 'POST',
+      body: JSON.stringify({
+        name: cardName,
+        quantity: qty,
+        is_commander: slot === 'commander',
+        is_sideboard: slot === 'sideboard',
+      }),
+    });
+    await openDeck(currentDeckId, { keepAddPanel: true });
+    const input = document.getElementById('deck-card-search-input');
+    if (input) input.focus();
+  } catch (e) {
+    alert('Could not add card: ' + e.message);
+  }
+}
+
+function openDeckEditModal() {
+  if (!currentDeck) return;
+  const modal = document.getElementById('deck-edit-modal');
+  document.getElementById('edit-deck-name-input').value = currentDeck.name || '';
+  const fmtSel = document.getElementById('edit-deck-format-select');
+  const curFormat = currentDeck.format || '';
+  // Preserve unknown formats (e.g. legacy values) by adding an option on the fly
+  if (curFormat && !Array.from(fmtSel.options).some(o => o.value === curFormat)) {
+    const opt = document.createElement('option');
+    opt.value = curFormat;
+    opt.textContent = curFormat;
+    fmtSel.appendChild(opt);
+  }
+  fmtSel.value = curFormat;
+  document.getElementById('edit-deck-desc-input').value = currentDeck.description || '';
+  modal.classList.remove('hidden');
+}
+
+function closeDeckEditModal() {
+  document.getElementById('deck-edit-modal')?.classList.add('hidden');
+}
+
+async function saveDeckEdit(e) {
+  e.preventDefault();
+  if (!currentDeckId) return;
+  const name = document.getElementById('edit-deck-name-input').value.trim();
+  const format = document.getElementById('edit-deck-format-select').value;
+  const description = document.getElementById('edit-deck-desc-input').value;
+  if (!name) { alert('Deck name is required.'); return; }
+  try {
+    await apiFetch(`/api/decks/${currentDeckId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name, format, description }),
+    });
+    closeDeckEditModal();
+    await openDeck(currentDeckId, { keepAddPanel: document.getElementById('deck-add-card-panel')?.classList.contains('hidden') === false });
+    loadDeckList();
+    loadNavStats();
+  } catch (err) {
+    alert('Could not save deck: ' + err.message);
+  }
 }
 
 async function loadDeckList() {
@@ -730,11 +1031,21 @@ async function loadDeckList() {
     list.innerHTML = decks.map(deck => {
       const total = (deck.total_cards ?? deck.card_count ?? 0).toLocaleString();
       const unique = (deck.unique_cards ?? 0).toLocaleString();
+      const check = expectedDeckSize(deck.format, deck.total_cards ?? deck.card_count ?? 0);
+      const warn = check.warning;
+      const sizeBadge = check.expected === null
+        ? ''
+        : warn
+          ? `<span class="badge badge-size-warning" title="${escHtml(warn)}">⚠️ ${deck.total_cards ?? deck.card_count}/${check.expected}</span>`
+          : `<span class="badge badge-qty" title="Deck size matches expected ${check.expected}">✓ ${deck.total_cards ?? deck.card_count}/${check.expected}</span>`;
       return `
         <div class="deck-card" data-id="${deck.id}">
-          <div class="deck-card-name">${escHtml(deck.name)}</div>
-          ${deck.format ? `<span class="format-badge">${escHtml(deck.format)}</span>` : ''}
-          <div class="deck-card-count">${total} cards (${unique} unique)</div>
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.5rem;">
+            <div class="deck-card-name">${escHtml(deck.name)}</div>
+            ${sizeBadge}
+          </div>
+          ${deck.format ? `<span class="format-badge" style="margin-left:0;">${escHtml(deck.format)}</span>` : ''}
+          <div class="deck-card-count">${total} cards (${unique} unique)${warn ? `<div style="color:var(--warning);font-size:0.78rem;margin-top:0.3rem;" title="${escHtml(warn)}">⚠️ ${escHtml(warn)}</div>` : ''}</div>
         </div>
       `;
     }).join('');
@@ -748,14 +1059,22 @@ async function loadDeckList() {
   }
 }
 
-async function openDeck(deckId) {
+async function openDeck(deckId, opts = {}) {
+  const keepAddPanel = opts.keepAddPanel || false;
+  currentDeckId = deckId;
   document.getElementById('deck-list').classList.add('hidden');
   const panel = document.getElementById('deck-panel');
   panel.classList.remove('hidden');
   document.getElementById('deck-panel-cards').innerHTML = '<div class="loading-state">Loading…</div>';
+  if (!keepAddPanel) {
+    document.getElementById('deck-add-card-panel')?.classList.add('hidden');
+    const s = document.getElementById('deck-card-search-input');
+    if (s) s.value = '';
+  }
 
   try {
     const deck = await apiFetch(`/api/decks/${deckId}`);
+    currentDeck = deck;
     document.getElementById('deck-panel-name').textContent = deck.name;
     document.getElementById('deck-panel-format').textContent = deck.format || '';
     document.getElementById('deck-panel-desc').textContent = deck.description || '';
@@ -765,6 +1084,21 @@ async function openDeck(deckId) {
     const countsBadge = document.getElementById('deck-panel-counts');
     if (countsBadge) {
       countsBadge.textContent = `${totalQty} cards (${uniqueQty} unique)`;
+    }
+    // Deck-size warning (100 for Commander, 60 for most other formats)
+    let warnEl = document.getElementById('deck-size-warning');
+    if (!warnEl) {
+      warnEl = document.createElement('div');
+      warnEl.id = 'deck-size-warning';
+      document.getElementById('deck-panel-desc').after(warnEl);
+    }
+    const check = expectedDeckSize(deck.format, totalQty);
+    if (check.warning) {
+      warnEl.innerHTML = `<div class="badge badge-size-warning" style="display:inline-block;margin-top:0.4rem;" title="${escHtml(check.warning)}">${escHtml(check.warning)}</div>`;
+      warnEl.style.display = 'block';
+    } else {
+      warnEl.innerHTML = '';
+      warnEl.style.display = 'none';
     }
 
     renderDeckCards(deck.cards);
@@ -808,16 +1142,29 @@ function renderDeckCards(cards) {
       const typeTotal = typeCards.reduce((a,c) => a + (c.quantity || 1), 0);
       s += `<div class="deck-section-title" style="margin-top:0.5rem;opacity:0.6">${type} (${typeTotal})</div>`;
       typeCards.forEach(c => {
+        const isCommander = !!c.is_commander;
+        const isSide = !!c.is_sideboard;
         s += `
-          <div class="deck-card-row" data-scryfall="${c.scryfall_id || ''}">
-            ${c.image_uri
-              ? `<img src="${c.image_uri}" class="deck-card-thumb" alt="${escHtml(c.name)}" loading="lazy" />`
-              : '<div class="deck-card-thumb" style="background:var(--bg-elevated);border-radius:3px"></div>'}
-            <div>
-              <div class="deck-card-row-name">${escHtml(c.name)}</div>
-              <div class="deck-card-row-type">${escHtml(c.mana_cost || '')}</div>
+          <div class="deck-card-row" data-id="${c.id}" data-scryfall="${c.scryfall_id || ''}">
+            <div class="deck-card-row-info" data-row-info="${c.id}">
+              ${c.image_uri
+                ? `<img src="${c.image_uri}" class="deck-card-thumb" alt="${escHtml(c.name)}" loading="lazy" />`
+                : '<div class="deck-card-thumb" style="background:var(--bg-elevated);border-radius:3px"></div>'}
+              <div style="min-width:0;">
+                <div class="deck-card-row-name">${escHtml(c.name)}</div>
+                <div class="deck-card-row-type">${formatManaCost(c.mana_cost || '')} ${escHtml(c.type_line || '')}</div>
+              </div>
             </div>
-            <span class="deck-card-row-qty">×${c.quantity}</span>
+            <div class="deck-card-controls">
+              <div class="deck-qty-controls">
+                <button class="btn-qty-minus" data-qty-minus="${c.id}" title="Remove one (at 0 removes from deck only, keeps in collection)">−</button>
+                <span class="deck-card-row-qty">×${c.quantity}</span>
+                <button class="btn-qty-plus" data-qty-plus="${c.id}" title="Add one">+</button>
+              </div>
+              <button class="btn-role-toggle ${isCommander ? 'active' : ''}" data-role-cmd="${c.id}" title="Toggle Commander">👑</button>
+              <button class="btn-role-toggle ${isSide ? 'active' : ''}" data-role-side="${c.id}" title="Toggle Sideboard">📦</button>
+              <button class="btn-card-delete" data-del="${c.id}" title="Remove from deck (keeps in collection)">✕</button>
+            </div>
           </div>`;
       });
     }
@@ -829,13 +1176,71 @@ function renderDeckCards(cards) {
   html += renderSection('Mainboard', mainboard);
   html += renderSection('Sideboard', sideboard);
 
-  container.innerHTML = html || '<div class="empty-state">No cards in this deck.</div>';
+  if (!html) {
+    html = '<div class="empty-state">No cards in this deck. Use “Add Card from Collection” above to add cards you own.</div>';
+  }
+  container.innerHTML = html;
 
-  // Click deck card rows to open the modal
-  container.querySelectorAll('.deck-card-row[data-scryfall]').forEach(row => {
-    const sfId = row.dataset.scryfall;
-    if (!sfId) return;
-    row.addEventListener('click', async () => {
+  // Quantity + / −
+  container.querySelectorAll('[data-qty-plus]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const dcId = btn.dataset.qtyPlus;
+      const card = cards.find(x => String(x.id) === String(dcId));
+      const newQty = (card ? (card.quantity || 1) : 1) + 1;
+      updateDeckCardQty(dcId, newQty);
+    });
+  });
+  container.querySelectorAll('[data-qty-minus]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const dcId = btn.dataset.qtyMinus;
+      const card = cards.find(x => String(x.id) === String(dcId));
+      const newQty = (card ? (card.quantity || 1) : 1) - 1;
+      if (newQty <= 0) {
+        if (confirm('Quantity would be 0. Remove this card from the deck? (It stays in your collection.)')) {
+          deleteDeckCard(dcId);
+        }
+        return;
+      }
+      updateDeckCardQty(dcId, newQty);
+    });
+  });
+
+  // Role toggles — move between Commander / Mainboard / Sideboard
+  container.querySelectorAll('[data-role-cmd]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const dcId = btn.dataset.roleCmd;
+      const card = cards.find(x => String(x.id) === String(dcId));
+      if (!card) return;
+      updateDeckCardRole(dcId, { is_commander: !card.is_commander, is_sideboard: false });
+    });
+  });
+  container.querySelectorAll('[data-role-side]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const dcId = btn.dataset.roleSide;
+      const card = cards.find(x => String(x.id) === String(dcId));
+      if (!card) return;
+      updateDeckCardRole(dcId, { is_sideboard: !card.is_sideboard, is_commander: false });
+    });
+  });
+
+  // Delete from deck
+  container.querySelectorAll('[data-del]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteDeckCard(btn.dataset.del);
+    });
+  });
+
+  // Click card info to open detail
+  container.querySelectorAll('.deck-card-row-info').forEach(info => {
+    info.addEventListener('click', async () => {
+      const row = info.closest('.deck-card-row[data-scryfall]');
+      const sfId = row?.dataset.scryfall;
+      if (!sfId) return;
       openModal();
       modalInner.innerHTML = '<div class="modal-loading">Loading card details…</div>';
       try {
@@ -863,15 +1268,50 @@ function renderDeckCards(cards) {
   });
 }
 
+async function updateDeckCardQty(deckCardId, newQty) {
+  try {
+    await apiFetch(`/api/decks/${currentDeckId}/cards/${deckCardId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ quantity: newQty }),
+    });
+    await openDeck(currentDeckId, { keepAddPanel: true });
+    loadDeckList();
+  } catch (e) {
+    alert('Could not update quantity: ' + e.message);
+  }
+}
+
+async function updateDeckCardRole(deckCardId, role) {
+  try {
+    await apiFetch(`/api/decks/${currentDeckId}/cards/${deckCardId}`, {
+      method: 'PUT',
+      body: JSON.stringify(role),
+    });
+    await openDeck(currentDeckId, { keepAddPanel: true });
+    loadDeckList();
+  } catch (e) {
+    alert('Could not move card: ' + e.message);
+  }
+}
+
+async function deleteDeckCard(deckCardId) {
+  if (!confirm('Remove this card from the deck? It will stay in your collection.')) return;
+  try {
+    await apiFetch(`/api/decks/${currentDeckId}/cards/${deckCardId}`, { method: 'DELETE' });
+    await openDeck(currentDeckId, { keepAddPanel: true });
+    loadDeckList();
+    loadNavStats();
+  } catch (e) {
+    alert('Could not remove card: ' + e.message);
+  }
+}
+
 function closeDeckPanel() {
+  currentDeckId = null;
+  currentDeck = null;
   document.getElementById('deck-panel').classList.add('hidden');
   document.getElementById('deck-list').classList.remove('hidden');
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-  const backBtn = document.getElementById('deck-panel-back');
-  if (backBtn) backBtn.addEventListener('click', closeDeckPanel);
-});
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 function escHtml(str) {

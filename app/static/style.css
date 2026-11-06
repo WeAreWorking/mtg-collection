@@ -405,12 +405,25 @@ code {
   color: var(--cyan);
   font-size: 0.68rem;
 }
-.badge-prism {
+.badge-sorting {
   background: rgba(255, 42, 133, 0.15);
   border: 1px solid var(--pink);
   color: var(--pink);
   font-size: 0.68rem;
   animation: pulse-border 2.5s infinite ease-in-out;
+}
+.badge-printings {
+  background: rgba(157, 78, 221, 0.12);
+  border: 1px solid rgba(157, 78, 221, 0.45);
+  color: #c77dff;
+  font-size: 0.68rem;
+}
+.badge-size-warning {
+  background: rgba(255, 230, 0, 0.12);
+  border: 1px solid rgba(255, 230, 0, 0.55);
+  color: var(--warning);
+  font-size: 0.72rem;
+  white-space: nowrap;
 }
 @keyframes pulse-border {
   0%, 100% { box-shadow: 0 0 4px rgba(255, 42, 133, 0.3); }
@@ -433,7 +446,9 @@ code {
 
 .spreadsheet-table {
   width: 100%;
+  min-width: 960px;
   border-collapse: collapse;
+  table-layout: fixed;
   text-align: left;
   font-size: 0.9rem;
 }
@@ -480,6 +495,14 @@ code {
   align-items: center;
   gap: 0.4rem;
   white-space: nowrap;
+  overflow: hidden;
+  max-width: 100%;
+}
+.table-card-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 .table-card-name:hover {
   color: var(--cyan);
@@ -520,10 +543,25 @@ code {
   color: var(--text-muted);
   font-size: 0.8rem;
   white-space: nowrap;
-  max-width: 125px;
+  max-width: 95px;
   overflow: hidden;
   text-overflow: ellipsis;
   display: block;
+}
+.col-type-td {
+  max-width: 95px;
+  overflow: hidden;
+}
+.col-storage {
+  overflow: hidden;
+}
+.col-storage .badge {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+  max-width: 130px;
+  vertical-align: middle;
 }
 .table-price {
   font-family: var(--font-mono);
@@ -538,7 +576,7 @@ code {
   gap: 0.35rem;
   flex-wrap: wrap;
   align-items: center;
-  max-width: 180px;
+  max-width: 160px;
 }
 
 .text-center { text-align: center; }
@@ -781,6 +819,14 @@ code {
 }
 .deck-card-row-name { font-size: 0.92rem; font-weight: 600; color: #fff; }
 .deck-card-row-type { font-size: 0.78rem; color: var(--text-muted); font-family: var(--font-mono); }
+.deck-card-row-type .mana-symbol { width: 14px; height: 14px; }
+.printing-row { }
+@media (max-width: 650px) {
+  .printing-row {
+    grid-template-columns: 1fr 1fr !important;
+    grid-auto-rows: auto;
+  }
+}
 .deck-card-controls {
   display: flex;
   align-items: center;
@@ -943,5 +989,28 @@ code {
 .import-result.success { border-color: var(--green); box-shadow: 0 0 15px rgba(0, 255, 159, 0.15); }
 .import-result.error   { border-color: var(--pink); box-shadow: 0 0 15px rgba(255, 42, 133, 0.15); }
 .import-result ul { margin-top: 0.6rem; padding-left: 1.25rem; color: var(--text-muted); font-size: 0.85rem; }
+
+/* ── Responsive: hide storage boxes before card columns ─────────────────────
+   Keeps Qty / Name / Mana / Type / Set / Rarity / Decks / Prices visible;
+   storage is shown via hover title + detail modal when space is tight. */
+@media (max-width: 1150px) {
+  .spreadsheet-table .col-storage,
+  .spreadsheet-table th.col-storage-th,
+  .spreadsheet-table col.col-storage-col {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .spreadsheet-table .col-foil,
+  .spreadsheet-table th.col-foil-th,
+  .spreadsheet-table col.col-foil-col {
+    display: none;
+  }
+}
+.deck-card-search-results {
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  overflow: hidden;
+}
 
 .hidden { display: none !important; }

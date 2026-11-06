@@ -1,12 +1,12 @@
-/* ── PRISM Builder & Sleeve Marking Tool Styles ────────────────────────── */
+/* ── SORTING Builder & Sleeve Marking Tool Styles ────────────────────────── */
 
-.prism-container {
+.sorting-container {
   max-width: 1200px;
   margin: 0 auto;
   padding: 1.5rem;
 }
 
-.prism-header {
+.sorting-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -17,18 +17,18 @@
   border-bottom: 1px solid var(--border-color, #2a2c3d);
 }
 
-.prism-brand {
+.sorting-brand {
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
 
-.prism-logo-icon {
+.sorting-logo-icon {
   font-size: 1.8rem;
   filter: drop-shadow(0 0 8px rgba(0, 240, 255, 0.4));
 }
 
-.prism-title-input {
+.sorting-title-input {
   font-size: 1.4rem;
   font-weight: 700;
   background: transparent;
@@ -40,14 +40,14 @@
   transition: border-color 0.2s;
 }
 
-.prism-title-input:hover,
-.prism-title-input:focus {
+.sorting-title-input:hover,
+.sorting-title-input:focus {
   border-color: var(--cyan, #00f0ff);
   background: rgba(0, 240, 255, 0.05);
   outline: none;
 }
 
-.prism-header-actions {
+.sorting-header-actions {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -55,14 +55,14 @@
 }
 
 /* ── Tabs ────────────────────────────────────────────────────────────────── */
-.prism-tabs {
+.sorting-tabs {
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1.5rem;
   border-bottom: 2px solid rgba(255, 255, 255, 0.08);
 }
 
-.prism-tab-btn {
+.sorting-tab-btn {
   background: transparent;
   border: none;
   color: var(--text-muted, #8b92a8);
@@ -79,25 +79,25 @@
   font-family: inherit;
 }
 
-.prism-tab-btn:hover {
+.sorting-tab-btn:hover {
   color: #fff;
 }
 
-.prism-tab-btn.active {
+.sorting-tab-btn.active {
   color: var(--cyan, #00f0ff);
   border-bottom-color: var(--cyan, #00f0ff);
 }
 
-.prism-panel {
+.sorting-panel {
   display: block;
 }
 
-.prism-panel.hidden {
+.sorting-panel.hidden {
   display: none !important;
 }
 
 /* ── Callout / Banner ────────────────────────────────────────────────────── */
-.prism-callout {
+.sorting-callout {
   background: linear-gradient(135deg, rgba(40, 22, 69, 0.6), rgba(15, 23, 42, 0.8));
   border: 1px solid rgba(171, 74, 186, 0.3);
   border-radius: 10px;
@@ -109,25 +109,25 @@
   gap: 1rem;
 }
 
-.prism-callout-text {
+.sorting-callout-text {
   font-size: 0.95rem;
   line-height: 1.5;
   color: #d1d5db;
 }
 
-.prism-callout-text strong {
+.sorting-callout-text strong {
   color: #fff;
 }
 
 /* ── Decks List & Cards ──────────────────────────────────────────────────── */
-.prism-deck-grid {
+.sorting-deck-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 1rem;
   margin-bottom: 2rem;
 }
 
-.prism-deck-card {
+.sorting-deck-card {
   background: var(--bg-card, #131726);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-left: 5px solid var(--deck-color, #3E63DD);
@@ -140,24 +140,24 @@
   transition: transform 0.15s, border-color 0.15s;
 }
 
-.prism-deck-card:hover {
+.sorting-deck-card:hover {
   transform: translateY(-2px);
   border-color: rgba(255, 255, 255, 0.2);
 }
 
-.prism-deck-card-header {
+.sorting-deck-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.prism-deck-name {
+.sorting-deck-name {
   font-weight: 700;
   font-size: 1.1rem;
   color: #fff;
 }
 
-.prism-deck-commander {
+.sorting-deck-commander {
   font-size: 0.85rem;
   color: var(--text-muted, #9ca3af);
   display: flex;
@@ -165,7 +165,7 @@
   gap: 0.4rem;
 }
 
-.prism-deck-meta {
+.sorting-deck-meta {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -174,7 +174,7 @@
   margin-top: 0.25rem;
 }
 
-.prism-deck-actions {
+.sorting-deck-actions {
   display: flex;
   gap: 0.4rem;
   margin-top: 0.5rem;
@@ -182,7 +182,7 @@
 }
 
 /* ── Add Deck Form ───────────────────────────────────────────────────────── */
-.prism-form-card {
+.sorting-form-card {
   background: var(--bg-card, #131726);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
@@ -190,7 +190,7 @@
   margin-bottom: 2rem;
 }
 
-.prism-form-title {
+.sorting-form-title {
   font-size: 1.2rem;
   font-weight: 700;
   color: #fff;
@@ -200,7 +200,7 @@
   gap: 0.5rem;
 }
 
-.prism-color-swatches {
+.sorting-color-swatches {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -208,7 +208,7 @@
   margin-top: 0.5rem;
 }
 
-.prism-color-swatch {
+.sorting-color-swatch {
   width: 28px;
   height: 28px;
   border-radius: 6px;
@@ -217,24 +217,24 @@
   transition: transform 0.15s, border-color 0.15s;
 }
 
-.prism-color-swatch:hover {
+.sorting-color-swatch:hover {
   transform: scale(1.15);
 }
 
-.prism-color-swatch.active {
+.sorting-color-swatch.active {
   border-color: #fff;
   box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
 }
 
 /* ── Results Stats Bar ───────────────────────────────────────────────────── */
-.prism-stats-grid {
+.sorting-stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 1rem;
   margin-bottom: 1.5rem;
 }
 
-.prism-stat-box {
+.sorting-stat-box {
   background: var(--bg-card, #131726);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
@@ -244,19 +244,19 @@
   gap: 1rem;
 }
 
-.prism-stat-icon {
+.sorting-stat-icon {
   font-size: 2rem;
   opacity: 0.8;
 }
 
-.prism-stat-number {
+.sorting-stat-number {
   font-size: 1.6rem;
   font-weight: 700;
   color: #fff;
   font-family: var(--font-mono, monospace);
 }
 
-.prism-stat-label {
+.sorting-stat-label {
   font-size: 0.8rem;
   color: var(--text-muted, #9ca3af);
   text-transform: uppercase;
@@ -299,20 +299,20 @@
 }
 
 /* ── Results Table ───────────────────────────────────────────────────────── */
-.prism-table-container {
+.sorting-table-container {
   overflow-x: auto;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: var(--bg-card, #131726);
 }
 
-.prism-table {
+.sorting-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
 }
 
-.prism-table th {
+.sorting-table th {
   background: rgba(0, 0, 0, 0.3);
   padding: 0.75rem 1rem;
   text-align: left;
@@ -324,46 +324,46 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.prism-table td {
+.sorting-table td {
   padding: 0.75rem 1rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   vertical-align: middle;
 }
 
-.prism-table tr:hover {
+.sorting-table tr:hover {
   background: rgba(255, 255, 255, 0.02);
 }
 
-.prism-table tr.is-done {
+.sorting-table tr.is-done {
   opacity: 0.45;
 }
 
-.prism-table tr.is-done .card-name-text {
+.sorting-table tr.is-done .card-name-text {
   text-decoration: line-through;
 }
 
 /* ── Overlap Matrix ──────────────────────────────────────────────────────── */
-.prism-matrix-table {
+.sorting-matrix-table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 1rem;
   font-size: 0.85rem;
 }
 
-.prism-matrix-table th,
-.prism-matrix-table td {
+.sorting-matrix-table th,
+.sorting-matrix-table td {
   padding: 0.6rem 0.8rem;
   text-align: center;
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.prism-matrix-table th {
+.sorting-matrix-table th {
   background: rgba(0, 0, 0, 0.3);
   color: #fff;
   font-weight: 600;
 }
 
-.prism-matrix-cell-shared {
+.sorting-matrix-cell-shared {
   background: rgba(0, 240, 255, 0.15);
   color: var(--cyan, #00f0ff);
   font-weight: 700;

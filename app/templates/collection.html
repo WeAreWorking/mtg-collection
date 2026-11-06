@@ -5,7 +5,7 @@
 <div class="page-header">
   <div>
     <h1 class="page-title">My Collection</h1>
-    <p class="page-subtitle">Personal library &amp; PRISM modular card pool.</p>
+    <p class="page-subtitle">Personal library &amp; SORTING modular card pool.</p>
   </div>
   <div class="header-right">
     <span class="result-count" id="result-count">Loading…</span>
@@ -19,7 +19,7 @@
 
   <select id="filter-deck" class="filter-select">
     <option value="">All Decks, Boxes &amp; Pool</option>
-    <option value="shared">⚡ PRISM Shared (2+ decks)</option>
+    <option value="shared">⚡ SORTING Shared (2+ decks)</option>
     <option value="unassigned">📦 Binder / Unassigned</option>
   </select>
 
@@ -81,19 +81,32 @@
   <!-- Spreadsheet Table Mode -->
   <div id="card-table-wrapper" class="table-wrapper hidden">
     <table class="spreadsheet-table" id="card-table">
+      <colgroup>
+        <col style="width: 50px;" />   <!-- Qty -->
+        <col style="width: 175px;" />  <!-- Name -->
+        <col style="width: 88px;" />   <!-- Mana -->
+        <col style="width: 98px;" />   <!-- Type Line (short, truncated) -->
+        <col style="width: 72px;" />   <!-- Set -->
+        <col style="width: 82px;" />   <!-- Rarity -->
+        <col class="col-foil-col" style="width: 58px;" />   <!-- Foil -->
+        <col class="col-storage-col" style="width: 120px;" /> <!-- Storage (hidden when narrow) -->
+        <col style="width: 145px;" />  <!-- Decks -->
+        <col style="width: 84px;" />   <!-- Price USD -->
+        <col style="width: 88px;" />   <!-- Price CAD -->
+      </colgroup>
       <thead>
         <tr>
-          <th style="width: 55px;" class="text-center">Qty</th>
+          <th style="width: 50px;" class="text-center">Qty</th>
           <th>Card Name</th>
-          <th style="width: 105px;">Mana</th>
-          <th>Type Line</th>
-          <th style="width: 75px;" class="text-center">Set</th>
-          <th style="width: 85px;" class="text-center">Rarity</th>
-          <th style="width: 65px;" class="text-center">Foil</th>
-          <th>Storage</th>
-          <th>Decks / PRISM Pool</th>
-          <th style="width: 85px;" class="text-right">Price (USD)</th>
-          <th style="width: 90px;" class="text-right">Price (CAD)</th>
+          <th style="width: 88px;">Mana</th>
+          <th style="width: 98px;">Type Line</th>
+          <th style="width: 72px;" class="text-center">Set</th>
+          <th style="width: 82px;" class="text-center">Rarity</th>
+          <th style="width: 58px;" class="text-center col-foil-th">Foil</th>
+          <th class="col-storage-th">Storage</th>
+          <th>Decks / SORTING Pool</th>
+          <th style="width: 84px;" class="text-right">Price (USD)</th>
+          <th style="width: 88px;" class="text-right">Price (CAD)</th>
         </tr>
       </thead>
       <tbody id="card-table-body"></tbody>

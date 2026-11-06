@@ -1,63 +1,63 @@
 {% extends "base.html" %}
-{% block title %}MTG Collection App - PRISM Builder{% endblock %}
+{% block title %}MTG Collection App - SORTING Builder{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{{ url_for('static', filename='prism.css') }}" />
+<link rel="stylesheet" href="{{ url_for('static', filename='sorting.css') }}" />
 
-<div class="prism-container" id="prism-builder-container">
+<div class="sorting-container" id="sorting-builder-container">
 
   <!-- Header -->
-  <div class="prism-header">
-    <div class="prism-brand">
-      <span class="prism-logo-icon">💎</span>
-      <input type="text" id="prism-title-input" class="prism-title-input" value="My PRISM Container" title="Click to rename your PRISM collection" />
-      <span class="badge badge-prism" id="prism-deck-count-badge">0 decks</span>
+  <div class="sorting-header">
+    <div class="sorting-brand">
+      <span class="sorting-logo-icon">💎</span>
+      <input type="text" id="sorting-title-input" class="sorting-title-input" value="My SORTING Container" title="Click to rename your SORTING collection" />
+      <span class="badge badge-sorting" id="sorting-deck-count-badge">0 decks</span>
     </div>
 
-    <div class="prism-header-actions">
+    <div class="sorting-header-actions">
       <button class="btn btn-primary btn-sm" id="btn-load-from-db" title="Import all decks from your local SQLite collection database">
         📥 Load from Local Collection
       </button>
-      <button class="btn btn-ghost btn-sm" id="btn-export-prism-json" title="Download PRISM backup JSON file">
+      <button class="btn btn-ghost btn-sm" id="btn-export-sorting-json" title="Download SORTING backup JSON file">
         💾 Export JSON
       </button>
-      <button class="btn btn-ghost btn-sm" id="btn-import-prism-json" title="Import PRISM backup JSON file">
+      <button class="btn btn-ghost btn-sm" id="btn-import-sorting-json" title="Import SORTING backup JSON file">
         📂 Import JSON
       </button>
-      <input type="file" id="prism-json-file-input" accept=".json" style="display: none;" />
+      <input type="file" id="sorting-json-file-input" accept=".json" style="display: none;" />
     </div>
   </div>
 
   <!-- Tabs Navigation -->
-  <div class="prism-tabs">
-    <button class="prism-tab-btn active" data-tab="decks">
+  <div class="sorting-tabs">
+    <button class="sorting-tab-btn active" data-tab="decks">
       <span>🗂️</span> Decks
     </button>
-    <button class="prism-tab-btn" data-tab="results">
+    <button class="sorting-tab-btn" data-tab="results">
       <span>📊</span> Marking Results &amp; Guide
     </button>
   </div>
 
   <!-- ── Panel 1: Decks ──────────────────────────────────────────────────────── -->
-  <div class="prism-panel" id="prism-panel-decks">
+  <div class="sorting-panel" id="sorting-panel-decks">
     
-    <div class="prism-callout">
-      <div class="prism-callout-text">
+    <div class="sorting-callout">
+      <div class="sorting-callout-text">
         <strong>One physical copy can serve every deck that needs it.</strong><br />
         Cards shared by two or more decks form your modular <strong>Pool</strong>. Each deck is assigned a color stripe at a specific slot along the sleeve's edge so you can easily sort, assemble, and deconstruct your decks.
       </div>
     </div>
 
     <!-- Existing Decks List -->
-    <div id="prism-decks-list"></div>
+    <div id="sorting-decks-list"></div>
 
     <!-- Add Deck Form -->
-    <div class="prism-form-card">
-      <div class="prism-form-title">
-        <span>➕</span> Add a Deck to PRISM
+    <div class="sorting-form-card">
+      <div class="sorting-form-title">
+        <span>➕</span> Add a Deck to SORTING
       </div>
 
-      <form id="prism-add-deck-form">
+      <form id="sorting-add-deck-form">
         <div class="form-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
           <div>
             <label class="form-label">Deck Name *</label>
@@ -73,7 +73,7 @@
           <label class="form-label">Sleeve Stripe Color</label>
           <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
             <input type="color" id="deck-color-input" value="#EEB41B" style="width: 44px; height: 34px; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; cursor: pointer; background: transparent;" />
-            <div id="prism-swatches-container" class="prism-color-swatches"></div>
+            <div id="sorting-swatches-container" class="sorting-color-swatches"></div>
           </div>
         </div>
 
@@ -105,55 +105,55 @@
   </div>
 
   <!-- ── Panel 2: Results & Sleeve Marking Guide ─────────────────────────────── -->
-  <div class="prism-panel hidden" id="prism-panel-results">
+  <div class="sorting-panel hidden" id="sorting-panel-results">
 
     <!-- Stats Bar -->
-    <div class="prism-stats-grid">
-      <div class="prism-stat-box">
-        <div class="prism-stat-icon">📦</div>
+    <div class="sorting-stats-grid">
+      <div class="sorting-stat-box">
+        <div class="sorting-stat-icon">📦</div>
         <div>
-          <div class="prism-stat-number" id="stat-prism-total">0</div>
-          <div class="prism-stat-label">Total Unique Cards (Pool + Core)</div>
+          <div class="sorting-stat-number" id="stat-sorting-total">0</div>
+          <div class="sorting-stat-label">Total Unique Cards (Pool + Core)</div>
         </div>
       </div>
-      <div class="prism-stat-box">
-        <div class="prism-stat-icon">⚡</div>
+      <div class="sorting-stat-box">
+        <div class="sorting-stat-icon">⚡</div>
         <div>
-          <div class="prism-stat-number" id="stat-prism-shared" style="color: var(--cyan);">0</div>
-          <div class="prism-stat-label">Pool Cards (Shared in 2+ Decks)</div>
+          <div class="sorting-stat-number" id="stat-sorting-shared" style="color: var(--cyan);">0</div>
+          <div class="sorting-stat-label">Pool Cards (Shared in 2+ Decks)</div>
         </div>
       </div>
-      <div class="prism-stat-box">
-        <div class="prism-stat-icon">✅</div>
+      <div class="sorting-stat-box">
+        <div class="sorting-stat-icon">✅</div>
         <div>
-          <div class="prism-stat-number" id="stat-prism-marked" style="color: var(--green);">0 / 0</div>
-          <div class="prism-stat-label">Sleeves Marked</div>
+          <div class="sorting-stat-number" id="stat-sorting-marked" style="color: var(--green);">0 / 0</div>
+          <div class="sorting-stat-label">Sleeves Marked</div>
         </div>
       </div>
     </div>
 
     <!-- Collapsible Overlap Matrix -->
-    <details class="prism-callout" style="display: block; cursor: pointer; margin-bottom: 1.5rem;">
+    <details class="sorting-callout" style="display: block; cursor: pointer; margin-bottom: 1.5rem;">
       <summary style="font-weight: 700; color: #fff; font-size: 1rem;">
         📊 Deck Overlap Matrix (Click to expand)
       </summary>
-      <div id="prism-overlap-matrix" style="overflow-x: auto; margin-top: 1rem;"></div>
+      <div id="sorting-overlap-matrix" style="overflow-x: auto; margin-top: 1rem;"></div>
     </details>
 
     <!-- Toolbar: Filters, Search, Exports -->
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
       <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
-        <button class="btn btn-ghost btn-sm prism-filter-btn active" data-filter="all">All Cards</button>
-        <button class="btn btn-ghost btn-sm prism-filter-btn" data-filter="shared">⚡ Pool Only (2+ Decks)</button>
-        <button class="btn btn-ghost btn-sm prism-filter-btn" data-filter="undone">⏳ Undone Only</button>
+        <button class="btn btn-ghost btn-sm sorting-filter-btn active" data-filter="all">All Cards</button>
+        <button class="btn btn-ghost btn-sm sorting-filter-btn" data-filter="shared">⚡ Pool Only (2+ Decks)</button>
+        <button class="btn btn-ghost btn-sm sorting-filter-btn" data-filter="undone">⏳ Undone Only</button>
       </div>
 
       <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-        <input type="text" id="prism-results-search" class="filter-input" placeholder="Search cards…" style="width: 200px; padding: 0.35rem 0.6rem; font-size: 0.85rem;" />
+        <input type="text" id="sorting-results-search" class="filter-input" placeholder="Search cards…" style="width: 200px; padding: 0.35rem 0.6rem; font-size: 0.85rem;" />
         <button class="btn btn-primary btn-sm" id="btn-launch-scry" title="Launch step-by-step sleeve marking walkthrough">
           🔍 SCRY-Mode
         </button>
-        <button class="btn btn-ghost btn-sm" id="btn-export-prism-csv" title="Download CSV marking list">
+        <button class="btn btn-ghost btn-sm" id="btn-export-sorting-csv" title="Download CSV marking list">
           Export CSV
         </button>
         <button class="btn btn-ghost btn-sm" id="btn-print-guide" title="Print sleeve marking guide">
@@ -163,8 +163,8 @@
     </div>
 
     <!-- Results Table -->
-    <div class="prism-table-container">
-      <table class="prism-table">
+    <div class="sorting-table-container">
+      <table class="sorting-table">
         <thead>
           <tr>
             <th style="width: 45px; text-align: center;">Done</th>
@@ -172,7 +172,7 @@
             <th style="width: 180px;">Sleeve Stripes (Edge Mark)</th>
           </tr>
         </thead>
-        <tbody id="prism-results-tbody"></tbody>
+        <tbody id="sorting-results-tbody"></tbody>
       </table>
     </div>
 
@@ -211,5 +211,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='prism.js') }}"></script>
+<script src="{{ url_for('static', filename='sorting.js') }}"></script>
 {% endblock %}
