@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}PRISM Sleeve Builder — One Card, Every Deck{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='prism.css') }}" />
+
+<div class="prism-container" id="prism-builder-container">
+
+  <!-- Header -->
+  <div class="prism-header">
+    <div class="prism-brand">
+      <span class="prism-logo-icon">💎</span>
+      <input type="text" id="prism-title-input" class="prism-title-input" value="My PRISM Container" title="Click to rename your PRISM collection" />
+      <span class="badge badge-prism" id="prism-deck-count-badge">0 decks</span>
+    </div>
+
+    <div class="prism-header-actions">
+      <button class="btn btn-primary btn-sm" id="btn-load-from-db" title="Import all decks from your local SQLite collection database">
+        📥 Load from Local Collection
+      </button>
+      <button class="btn btn-ghost btn-sm" id="btn-export-prism-json" title="Download PRISM backup JSON file">
+        💾 Export JSON
+      </button>
+      <button class="btn btn-ghost btn-sm" id="btn-import-prism-json" title="Import PRISM backup JSON file">
+        📂 Import JSON
+      </button>
+      <input type="file" id="prism-json-file-input" accept=".json" style="display: none;" />
+    </div>
+  </div>
+
+  <!-- Tabs Navigation -->
+  <div class="prism-tabs">
+    <button class="prism-tab-btn active" data-tab="decks">
+      <span>🗂️</span> Decks
+    </button>
+    <button class="prism-tab-btn" data-tab="results">
+      <span>📊</span> Marking Results &amp; Guide
+    </button>
+  </div>
+
+  <!-- ── Panel 1: Decks ──────────────────────────────────────────────────────── -->
+  <div class="prism-panel" id="prism-panel-decks">
+    
+    <div class="prism-callout">
+      <div class="prism-callout-text">
+        <strong>One physical copy can serve every deck that needs it.</strong><br />
+        Cards shared by two or more decks form your modular <strong>Pool</strong>. Each deck is assigned a color stripe at a specific slot along the sleeve's edge so you can easily sort, assemble, and deconstruct your decks.
+      </div>
+    </div>
+
+    <!-- Existing Decks List -->
+    <div id="prism-decks-list"></div>
+
+    <!-- Add Deck Form -->
+    <div class="prism-form-card">
+      <div class="prism-form-title">
+        <span>➕</span> Add a Deck to PRISM
+      </div>
+
+      <form id="prism-add-deck-form">
+        <div class="form-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+          <div>
+            <label class="form-label">Deck Name *</label>
+            <input type="text" id="deck-name-input" class="filter-input" placeholder="e.g. Izzet Spellslinger" required />
+          </div>
+          <div>
+            <label class="form-label">Commander</label>
+            <input type="text" id="deck-commander-input" class="filter-input" placeholder="e.g. Stella Lee, Wild Card" />
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-bottom: 1rem;">
+          <label class="form-label">Sleeve Stripe Color</label>
+          <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+            <input type="color" id="deck-color-input" value="#EEB41B" style="width: 44px; height: 34px; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; cursor: pointer; background: transparent;" />
+            <div id="prism-swatches-container" class="prism-color-swatches"></div>
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-bottom: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+            <label class="form-label" style="margin-bottom: 0;">Decklist (One card per line, quantity first)</label>
+            <label class="btn btn-ghost btn-sm" style="cursor: pointer; margin: 0;">
+              📁 Upload file (.txt)
+              <input type="file" id="deck-file-picker" accept=".txt,.dek,.dec" style="display: none;" />
+            </label>
+          </div>
+          <textarea id="deck-list-textarea" class="filter-input" rows="8" placeholder="1 Sol Ring&#10;1 Arcane Signet&#10;1 Command Tower&#10;1 Rhystic Study&#10;1 Cyclonic Rift&#10;..." required style="font-family: var(--font-mono); font-size: 0.9rem; line-height: 1.4;"></textarea>
+        </div>
+
+        <!-- URL Import Helper -->
+        <div style="background: rgba(0,0,0,0.2); padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+          <span style="font-size: 0.85rem; color: var(--text-muted);">Or import from URL:</span>
+          <input type="text" id="deck-url-import-input" class="filter-input" placeholder="Archidekt or Moxfield URL" style="flex: 1; min-width: 200px;" />
+          <button type="button" id="btn-import-deck-url" class="btn btn-ghost btn-sm">Import URL</button>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem;">
+          <button type="submit" class="btn btn-primary">➕ Add Deck</button>
+          <button type="reset" class="btn btn-ghost">Reset</button>
+        </div>
+      </form>
+    </div>
+
+  </div>
+
+  <!-- ── Panel 2: Results & Sleeve Marking Guide ─────────────────────────────── -->
+  <div class="prism-panel hidden" id="prism-panel-results">
+
+    <!-- Stats Bar -->
+    <div class="prism-stats-grid">
+      <div class="prism-stat-box">
+        <div class="prism-stat-icon">📦</div>
+        <div>
+          <div class="prism-stat-number" id="stat-prism-total">0</div>
+          <div class="prism-stat-label">Total Unique Cards (Pool + Core)</div>
+        </div>
+      </div>
+      <div class="prism-stat-box">
+        <div class="prism-stat-icon">⚡</div>
+        <div>
+          <div class="prism-stat-number" id="stat-prism-shared" style="color: var(--cyan);">0</div>
+          <div class="prism-stat-label">Pool Cards (Shared in 2+ Decks)</div>
+        </div>
+      </div>
+      <div class="prism-stat-box">
+        <div class="prism-stat-icon">✅</div>
+        <div>
+          <div class="prism-stat-number" id="stat-prism-marked" style="color: var(--green);">0 / 0</div>
+          <div class="prism-stat-label">Sleeves Marked</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Collapsible Overlap Matrix -->
+    <details class="prism-callout" style="display: block; cursor: pointer; margin-bottom: 1.5rem;">
+      <summary style="font-weight: 700; color: #fff; font-size: 1rem;">
+        📊 Deck Overlap Matrix (Click to expand)
+      </summary>
+      <div id="prism-overlap-matrix" style="overflow-x: auto; margin-top: 1rem;"></div>
+    </details>
+
+    <!-- Toolbar: Filters, Search, Exports -->
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
+      <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+        <button class="btn btn-ghost btn-sm prism-filter-btn active" data-filter="all">All Cards</button>
+        <button class="btn btn-ghost btn-sm prism-filter-btn" data-filter="shared">⚡ Pool Only (2+ Decks)</button>
+        <button class="btn btn-ghost btn-sm prism-filter-btn" data-filter="undone">⏳ Undone Only</button>
+      </div>
+
+      <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+        <input type="text" id="prism-results-search" class="filter-input" placeholder="Search cards…" style="width: 200px; padding: 0.35rem 0.6rem; font-size: 0.85rem;" />
+        <button class="btn btn-primary btn-sm" id="btn-launch-scry" title="Launch step-by-step sleeve marking walkthrough">
+          🔍 SCRY-Mode
+        </button>
+        <button class="btn btn-ghost btn-sm" id="btn-export-prism-csv" title="Download CSV marking list">
+          Export CSV
+        </button>
+        <button class="btn btn-ghost btn-sm" id="btn-print-guide" title="Print sleeve marking guide">
+          🖨️ Print
+        </button>
+      </div>
+    </div>
+
+    <!-- Results Table -->
+    <div class="prism-table-container">
+      <table class="prism-table">
+        <thead>
+          <tr>
+            <th style="width: 45px; text-align: center;">Done</th>
+            <th>Card Name &amp; Deck Overlap</th>
+            <th style="width: 180px;">Sleeve Stripes (Edge Mark)</th>
+          </tr>
+        </thead>
+        <tbody id="prism-results-tbody"></tbody>
+      </table>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ── SCRY-Mode Fullscreen Walkthrough ──────────────────────────────────────── -->
+<div id="scry-mode-overlay" class="scry-mode-overlay hidden">
+  <div class="scry-header">
+    <div>
+      <h2 style="font-size: 1.4rem; color: var(--cyan); margin: 0;">SCRY-Mode Sleeve Marking</h2>
+      <span id="scry-progress-text" style="color: var(--text-muted); font-size: 0.85rem;">Card 1 of 50</span>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="btn-scry-close">✕ Exit</button>
+  </div>
+
+  <div class="scry-body">
+    <div class="scry-card-name" id="scry-card-name">Card Name</div>
+    <div>
+      <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 1.1rem;">
+        Mark this card's inner sleeve at the highlighted color slots:
+      </p>
+      <div class="scry-stripes-display" id="scry-stripes-display"></div>
+    </div>
+  </div>
+
+  <div class="scry-footer">
+    <button class="btn btn-ghost" id="btn-scry-skip">Skip Card →</button>
+    <button class="btn btn-primary" id="btn-scry-done" style="padding: 0.75rem 2rem; font-size: 1.1rem;">
+      ✓ Done / Mark Next
+    </button>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='prism.js') }}"></script>
+{% endblock %}

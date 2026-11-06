@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Import — MTG{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Import Cards</h1>
+  <p class="page-subtitle">Add cards to your collection or import a full decklist.</p>
+</div>
+
+<!-- Tab switcher -->
+<div class="tab-bar">
+  <button class="tab-btn active" data-tab="collection">📋 Collection Import</button>
+  <button class="tab-btn"        data-tab="deck">🗂️ Deck Import</button>
+</div>
+
+<!-- ── Collection Import Tab ── -->
+<div id="tab-collection" class="tab-panel">
+  <div class="import-layout">
+    <div class="import-left">
+      <label class="form-label">Card List</label>
+      <p class="form-hint">
+        One card per line. Supported formats:<br>
+        <code>4 Lightning Bolt</code><br>
+        <code>2 Snapcaster Mage (ISD)</code><br>
+        <code>1x Black Lotus (LEA) [foil]</code>
+      </p>
+      <textarea id="col-text" class="import-textarea"
+                placeholder="4 Lightning Bolt&#10;2 Snapcaster Mage (ISD)&#10;1x Black Lotus (LEA) [foil]"></textarea>
+    </div>
+
+    <div class="import-right">
+      <label class="form-label">Default Condition</label>
+      <select id="col-condition" class="filter-select full-width">
+        <option value="NM">NM — Near Mint</option>
+        <option value="LP">LP — Lightly Played</option>
+        <option value="MP">MP — Moderately Played</option>
+        <option value="HP">HP — Heavily Played</option>
+        <option value="DMG">DMG — Damaged</option>
+      </select>
+
+      <label class="form-label mt">Default Storage Location</label>
+      <input type="text" id="col-storage" class="filter-input full-width"
+             placeholder="e.g. Binder A, Commander Box" />
+
+      <label class="form-label mt">Default Purchase Price (per card)</label>
+      <input type="number" id="col-price" class="filter-input full-width"
+             placeholder="0.00" min="0" step="0.01" />
+
+      <button id="btn-import-collection" class="btn btn-primary full-width mt-lg">
+        Import to Collection
+      </button>
+    </div>
+  </div>
+
+  <div id="col-result" class="import-result hidden"></div>
+</div>
+
+<!-- ── Deck Import Tab ── -->
+<div id="tab-deck" class="tab-panel hidden">
+  <div class="import-layout">
+    <div class="import-left">
+      <label class="form-label">Deck URL or Decklist Text</label>
+      <p class="form-hint">
+        <strong>Option 1 (Easiest):</strong> Paste an Archidekt link: <code>https://archidekt.com/decks/123456/...</code><br>
+        <strong>Option 2:</strong> Paste exported text. Section headers like <code>Sideboard:</code> and <code>Commander:</code> are detected automatically.
+      </p>
+      <textarea id="deck-text" class="import-textarea"
+                placeholder="https://archidekt.com/decks/7760144/zimone_mystery_unraveler&#10;&#10;— OR paste text —&#10;1x Zimone, Mystery Unraveler (dsc) 8&#10;1x Aetherize (fdn) 151&#10;1x Cultivate (dsc) 174"></textarea>
+    </div>
+
+    <div class="import-right">
+      <label class="form-label">Deck Name <span class="form-hint" style="display:inline;">(auto-filled if using URL)</span></label>
+      <input type="text" id="deck-name" class="filter-input full-width"
+             placeholder="My Commander Deck" />
+
+      <label class="form-label mt">Format</label>
+      <select id="deck-format" class="filter-select full-width">
+        <option value="">— Select format —</option>
+        <option value="Commander">Commander / EDH</option>
+        <option value="Standard">Standard</option>
+        <option value="Modern">Modern</option>
+        <option value="Pioneer">Pioneer</option>
+        <option value="Legacy">Legacy</option>
+        <option value="Vintage">Vintage</option>
+        <option value="Pauper">Pauper</option>
+        <option value="Draft">Draft / Sealed</option>
+        <option value="Other">Other</option>
+      </select>
+
+      <label class="form-label mt">Notes / Description</label>
+      <textarea id="deck-desc" class="import-textarea short"
+                placeholder="Optional notes about this deck…"></textarea>
+
+      <div class="deck-collection-sync mt">
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.9rem;font-weight:600;">
+          <input type="checkbox" id="deck-sync-collection" checked style="width:16px;height:16px;accent-color:var(--accent);" />
+          Also add cards to Collection
+        </label>
+        <p class="form-hint" style="margin-top:0.3rem;">
+          Adds each card to your main collection (or increases quantity if already owned).
+        </p>
+
+        <label class="form-label mt">Collection Storage Location</label>
+        <input type="text" id="deck-storage" class="filter-input full-width"
+               placeholder="e.g. Commander Deck Box (or leave blank for Deck: [Name])" />
+      </div>
+
+      <button id="btn-import-deck" class="btn btn-primary full-width mt-lg">
+        Import Deck
+      </button>
+    </div>
+  </div>
+
+  <div id="deck-result" class="import-result hidden"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  initImportPage();
+</script>
+{% endblock %}

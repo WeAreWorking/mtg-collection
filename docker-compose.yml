@@ -1,0 +1,13 @@
+services:
+  mtg-collection:
+    image: mtg-collection:latest
+    container_name: mtg-collection
+    ports:
+      - "7432:7432"
+    volumes:
+      # Map a TrueNAS dataset to the /app/data directory inside the container.
+      # Change the left side (/mnt/your-pool/mtg-data) to your actual TrueNAS dataset path.
+      - /mnt/your-pool/mtg-data:/app/data
+    restart: unless-stopped
+    environment:
+      - SECRET_KEY=change-me-to-something-random

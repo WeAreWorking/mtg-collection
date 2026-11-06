@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}MTG Collection // PRISM Base{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body class="retro-space">
+
+  <nav class="navbar">
+    <div class="nav-brand">
+      <span class="nav-logo">🛸</span>
+      <span class="nav-title">MTG <span class="nav-title-glow">PRISM</span></span>
+      <span class="nav-tagline">STATION // 7432</span>
+    </div>
+    <div class="nav-links">
+      <a href="/collection" class="nav-link {% if request.path == '/collection' %}active{% endif %}">
+        <span class="nav-icon">🪐</span> Collection
+      </a>
+      <a href="/decks" class="nav-link {% if request.path == '/decks' %}active{% endif %}">
+        <span class="nav-icon">🗂️</span> Decks
+      </a>
+      <a href="/prism" class="nav-link {% if request.path in ['/prism', '/build'] %}active{% endif %}">
+        <span class="nav-icon">🎨</span> PRISM Builder
+      </a>
+      <a href="/import" class="nav-link {% if request.path == '/import' %}active{% endif %}">
+        <span class="nav-icon">⚡</span> Import
+      </a>
+    </div>
+    <div class="nav-stats" id="nav-stats">
+      <span class="stat-pill stat-cyan" id="stat-cards">— cards</span>
+      <span class="stat-pill stat-pink" id="stat-decks">— decks</span>
+      <span class="stat-pill stat-gold" id="stat-value" title="Market Value: USD & CAD">— value</span>
+      <button id="btn-refresh-prices" class="stat-btn" title="Refresh market prices from Scryfall">↻</button>
+    </div>
+  </nav>
+
+  <main class="page-content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Card detail modal (shared across pages) -->
+  <div id="card-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-box">
+      <button class="modal-close" id="modal-close-btn" aria-label="Close">✕</button>
+      <div class="modal-inner" id="modal-inner">
+        <div class="modal-loading">Scanning databanks…</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

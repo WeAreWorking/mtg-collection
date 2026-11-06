@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Collection — MTG Collection{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">My Collection</h1>
+    <p class="page-subtitle">Personal library &amp; PRISM modular card pool.</p>
+  </div>
+  <div class="header-right">
+    <span class="result-count" id="result-count">Loading…</span>
+  </div>
+</div>
+
+<!-- Filter bar -->
+<div class="filter-bar">
+  <input type="text" id="search-q" class="filter-input search-input"
+         placeholder="Search by name, type, or oracle text…" autocomplete="off" />
+
+  <select id="filter-deck" class="filter-select">
+    <option value="">All Decks &amp; Pool</option>
+    <option value="shared">⚡ PRISM Shared (2+ decks)</option>
+    <option value="unassigned">📦 Binder / Unassigned</option>
+  </select>
+
+  <select id="filter-color" class="filter-select">
+    <option value="">Any Color</option>
+    <option value="W">⬜ White</option>
+    <option value="U">🔵 Blue</option>
+    <option value="B">⚫ Black</option>
+    <option value="R">🔴 Red</option>
+    <option value="G">🟢 Green</option>
+    <option value="C">◇ Colorless</option>
+  </select>
+
+  <select id="filter-rarity" class="filter-select">
+    <option value="">Any Rarity</option>
+    <option value="common">Common</option>
+    <option value="uncommon">Uncommon</option>
+    <option value="rare">Rare</option>
+    <option value="mythic">Mythic</option>
+  </select>
+
+  <select id="filter-foil" class="filter-select">
+    <option value="">Foil / Non-Foil</option>
+    <option value="true">✦ Foil Only</option>
+    <option value="false">Non-Foil Only</option>
+  </select>
+
+  <input type="text" id="filter-storage" class="filter-input"
+         placeholder="Storage / Box…" autocomplete="off" />
+
+  <select id="filter-sort" class="filter-select">
+    <option value="name">Sort: Name</option>
+    <option value="price_desc">Sort: Price (High to Low)</option>
+    <option value="price_asc">Sort: Price (Low to High)</option>
+    <option value="cmc">Sort: Mana Value</option>
+    <option value="rarity">Sort: Rarity</option>
+    <option value="added_at">Sort: Date Added</option>
+  </select>
+
+  <select id="filter-per-page" class="filter-select" title="Items per page">
+    <option value="60">60 / page</option>
+    <option value="120">120 / page</option>
+    <option value="250" selected>250 / page</option>
+    <option value="500">500 / page</option>
+  </select>
+
+  <!-- View mode toggle: Visual Grid vs Spreadsheet Table -->
+  <button id="btn-toggle-view" class="btn btn-ghost" title="Switch between Visual Card Grid and Spreadsheet Table">
+    <span id="toggle-view-icon">📊</span> <span id="toggle-view-label">Spreadsheet View</span>
+  </button>
+
+  <button id="btn-clear-filters" class="btn btn-ghost">Clear</button>
+</div>
+
+<!-- Main view container: Visual Grid or Spreadsheet Table -->
+<div id="view-container">
+  <!-- Visual Grid Mode -->
+  <div id="card-grid" class="card-grid">
+    <div class="loading-state">Loading your collection…</div>
+  </div>
+
+  <!-- Spreadsheet Table Mode -->
+  <div id="card-table-wrapper" class="table-wrapper hidden">
+    <table class="spreadsheet-table" id="card-table">
+      <thead>
+        <tr>
+          <th style="width: 55px;" class="text-center">Qty</th>
+          <th>Card Name</th>
+          <th style="width: 105px;">Mana</th>
+          <th>Type Line</th>
+          <th style="width: 75px;" class="text-center">Set</th>
+          <th style="width: 85px;" class="text-center">Rarity</th>
+          <th style="width: 65px;" class="text-center">Foil</th>
+          <th>Storage</th>
+          <th>Decks / PRISM Pool</th>
+          <th style="width: 85px;" class="text-right">Price (USD)</th>
+          <th style="width: 90px;" class="text-right">Price (CAD)</th>
+        </tr>
+      </thead>
+      <tbody id="card-table-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Pagination -->
+<div id="pagination" class="pagination hidden"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  initCollectionPage();
+</script>
+{% endblock %}

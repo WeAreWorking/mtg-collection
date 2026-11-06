@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Decks — MTG{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">My Decks</h1>
+  <span class="result-count" id="deck-count">Loading…</span>
+</div>
+
+<div id="deck-list" class="deck-list">
+  <div class="loading-state">Loading decks…</div>
+</div>
+
+<!-- Deck detail panel (slides in) -->
+<div id="deck-panel" class="deck-panel hidden">
+  <div class="deck-panel-header">
+    <button id="deck-panel-back" class="btn btn-ghost">← Back to Decks</button>
+    <div class="deck-panel-title-row">
+      <h2 id="deck-panel-name"></h2>
+      <span id="deck-panel-format" class="format-badge"></span>
+      <span id="deck-panel-counts" class="format-badge" style="background:var(--accent);color:#fff;border-color:var(--accent);"></span>
+    </div>
+    <p id="deck-panel-desc" class="deck-desc"></p>
+    <button id="deck-panel-delete" class="btn btn-danger btn-sm" style="margin-top:0.75rem;">Delete Deck</button>
+  </div>
+  <div id="deck-panel-cards" class="deck-card-sections"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  initDecksPage();
+</script>
+{% endblock %}
