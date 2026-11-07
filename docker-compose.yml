@@ -1,12 +1,16 @@
 services:
   mtg-collection:
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: mtg-collection:latest
     container_name: mtg-collection
     ports:
       - "7432:7432"
     volumes:
-      # Map a TrueNAS dataset to the /app/data directory inside the container.
-      # Change the left side (/mnt/your-pool/mtg-data) to your actual TrueNAS dataset path.
+      # TrueNAS / Dockge: map a dataset to /app/data inside the container.
+      # Change the left side to your actual dataset path, e.g. /mnt/pool/mtg-data
+      # The app creates collection.db inside this directory on first start (starts empty).
       - /mnt/your-pool/mtg-data:/app/data
     restart: unless-stopped
     environment:
