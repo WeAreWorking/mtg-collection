@@ -45,6 +45,7 @@
       <div class="sorting-callout-text">
         <strong>One physical copy can serve every deck that needs it.</strong><br />
         Cards shared by two or more decks form your modular <strong>Pool</strong>. Each deck is assigned a color stripe at a specific slot along the sleeve's edge so you can easily sort, assemble, and deconstruct your decks.
+        <span style="opacity:0.85;">Up to <strong>48 decks</strong> per sleeve (one colour + one slot each, like PRISM — 96 with dot splits). The 48 stripes below match the single purchasable <a href="https://www.amazon.ca/dp/B0BR3XX6NC" target="_blank" rel="noopener">Betem 48 Colors Dual Tip Acrylic Paint Markers on Amazon.ca (B0BR3XX6NC, $29.99)</a> — no single Uni Posca 48-set exists there (largest Posca sets are 29/24 colours).</span>
       </div>
     </div>
 
@@ -70,9 +71,9 @@
         </div>
 
         <div class="form-row" style="margin-bottom: 1rem;">
-          <label class="form-label">Sleeve Stripe Color</label>
+          <label class="form-label">Sleeve Stripe Color <span style="text-transform:none; letter-spacing:0; font-family:var(--font-sans); color:var(--text-muted);">(48 Betem colours, PRISM-compatible — slot # wraps the deck list. <a href="https://www.amazon.ca/dp/B0BR3XX6NC" target="_blank" rel="noopener">Buy set on Amazon.ca</a>)</span></label>
           <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
-            <input type="color" id="deck-color-input" value="#EEB41B" style="width: 44px; height: 34px; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; cursor: pointer; background: transparent;" />
+            <input type="color" id="deck-color-input" value="#F44336" style="width: 44px; height: 34px; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; cursor: pointer; background: transparent;" />
             <div id="sorting-swatches-container" class="sorting-color-swatches"></div>
           </div>
         </div>
@@ -169,7 +170,7 @@
           <tr>
             <th style="width: 45px; text-align: center;">Done</th>
             <th>Card Name &amp; Deck Overlap</th>
-            <th style="width: 180px;">Sleeve Stripes (Edge Mark)</th>
+            <th style="width: 320px;">Sleeve Stripes (Edge Mark)</th>
           </tr>
         </thead>
         <tbody id="sorting-results-tbody"></tbody>

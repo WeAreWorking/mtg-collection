@@ -603,7 +603,7 @@ function renderGrid(data) {
       No cards found in databanks. Try adjusting your filters or <a href="/import">import some cards</a>.
     </div>`;
     if (grid) grid.innerHTML = emptyHtml;
-    if (tableBody) tableBody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:3rem;color:var(--text-muted);font-family:var(--font-mono);">No cards found in databanks.</td></tr>`;
+    if (tableBody) tableBody.innerHTML = `<tr class="table-empty-row"><td colspan="11" class="table-empty-cell"><div class="empty-state"><span class="empty-icon">🛸</span>No cards found in databanks. Try adjusting your filters or <a href="/import">import some cards</a>.</div></td></tr>`;
     document.getElementById('pagination').classList.add('hidden');
     return;
   }
@@ -764,15 +764,11 @@ function initImportPage() {
     result.classList.add('hidden');
 
     try {
-      const condEl = document.getElementById('col-condition');
-      const priceEl = document.getElementById('col-price');
       const data = await apiFetch('/api/import/collection', {
         method: 'POST',
         body: JSON.stringify({
           text,
-          condition: condEl ? condEl.value : 'NM',
           storage:   document.getElementById('col-storage').value,
-          purchase_price: priceEl ? (parseFloat(priceEl.value) || null) : null,
         }),
       });
       const errList = data.errors.length
@@ -812,7 +808,7 @@ function initImportPage() {
         body: JSON.stringify({
           text,
           name,
-          format:             document.getElementById('deck-format').value,
+          format:             (document.getElementById('deck-format').value || '').trim() || 'Commander',
           description:        document.getElementById('deck-desc').value,
           add_to_collection:  syncCol,
           storage:            deckStorage,
@@ -847,10 +843,90 @@ function showResult(el, type, html) {
 let currentDeckId = null;
 let currentDeck = null;
 let deckSearchDebounce = null;
+let deckSearchCache = [];           // last search results (with printings)
+let deckSelectedPrinting = {};      // name -> printing id (builder selection)
+
+function _normalizeIdentity(value) {
+  if (!value) return [];
+  const parts = Array.isArray(value) ? value : String(value).split(',');
+  return parts.map(p => String(p).trim().toUpperCase()).filter(c => ['W','U','B','R','G'].includes(c));
+}
+
+function _commanderIdentity(deck) {
+  if (!deck) return null;
+  if (Array.isArray(deck.commander_color_identity)) return deck.commander_color_identity.slice();
+  if (deck.commander_color_identity == null && Array.isArray(deck.cards)) {
+    const cmds = deskCardsCommander(deck);
+    if (!cmds.length) return null;
+    const set = new Set();
+    cmds.forEach(c => _normalizeIdentity(c.color_identity?.length ? c.color_identity : c.colors).forEach(col => set.add(col)));
+    return Array.from(set);
+  }
+  return null;
+}
+
+function deskCardsCommander(deck) {
+  return (deck?.cards || []).filter(c => c.is_commander);
+}
+
+function _isLegalForCommander(cardIdentity, commanderIdentity) {
+  if (!Array.isArray(commanderIdentity)) return true; // no commander set
+  const allowed = new Set(commanderIdentity.map(c => c.toUpperCase()));
+  const have = new Set(_normalizeIdentity(cardIdentity));
+  for (const c of have) {
+    if (!allowed.has(c)) return false;
+  }
+  return true;
+}
+
+function _identityLabel(identity) {
+  if (identity == null) return 'no commander yet — all colours allowed';
+  if (!identity.length) return 'colourless';
+  return identity.join('');
+}
+
+function _identitySymbols(identity) {
+  if (!identity || !identity.length) return '(colourless)';
+  return _normalizeIdentity(identity).map(c => `<img src="/static/mana/${c}.svg" class="mana-symbol" alt="{${c}}" title="{${c}}" onerror="this.onerror=null; this.src='https://svgs.scryfall.io/card-symbols/${c}.svg';" />`).join('');
+}
+
+function updateDeckIdentityUI() {
+  const banner = document.getElementById('deck-identity-banner');
+  const note = document.getElementById('deck-builder-identity');
+  const toggle = document.getElementById('deck-legal-only');
+  const toggleWrap = document.getElementById('deck-identity-toggle-wrap');
+  const identity = _commanderIdentity(currentDeck);
+  const isCommanderDeck = (() => {
+    const fmt = ((currentDeck?.format || '').trim() || 'Commander').toLowerCase();
+    return fmt.includes('commander') || fmt.includes('edh');
+  })();
+  if (banner) {
+    if (identity != null && isCommanderDeck) {
+      const cmds = deskCardsCommander(currentDeck);
+      const names = cmds.map(c => c.name).join(' + ') || 'Commander';
+      banner.innerHTML = `<span class="badge badge-sorting" title="Commander colour identity restricts the 99">🎨 Commander identity: ${_identitySymbols(identity)} <span style="color:var(--text-muted);font-weight:600;">${escHtml(_identityLabel(identity))}</span> <span style="color:var(--text-muted);">(${escHtml(names)})</span></span>`;
+      banner.style.display = '';
+    } else if (isCommanderDeck) {
+      banner.innerHTML = `<span class="badge badge-set" title="Add a commander to restrict colours">👑 No commander yet — add one to enable colour identity restrictions</span>`;
+      banner.style.display = '';
+    } else {
+      banner.innerHTML = '';
+      banner.style.display = 'none';
+    }
+  }
+  if (note) {
+    note.textContent = (identity != null && isCommanderDeck)
+      ? ` Commander identity ${_identityLabel(identity)} — showing only legal cards.`
+      : (isCommanderDeck ? ' Set a commander to restrict colours.' : '');
+  }
+  if (toggleWrap) toggleWrap.style.display = (isCommanderDeck && identity != null) ? '' : 'none';
+  if (toggle && identity == null) toggle.checked = true;
+}
 
 function expectedDeckSize(format, totalQty) {
-  const fmt = (format || '').trim().toLowerCase();
-  if (!fmt || /^\d+$/.test(fmt)) return { expected: null, ok: true, warning: null };
+  const raw = (format || '').trim();
+  // Empty or legacy numeric values are treated as Commander (100).
+  const fmt = (!raw || /^\d+$/.test(raw)) ? 'commander' : raw.toLowerCase();
   let expected = 60;
   if (fmt.includes('commander') || fmt.includes('edh')) expected = 100;
   else if (fmt.includes('draft') || fmt.includes('sealed')) expected = 40;
@@ -858,7 +934,7 @@ function expectedDeckSize(format, totalQty) {
   return {
     expected,
     ok,
-    warning: ok ? null : `Deck has ${totalQty} cards (expected ${expected} for ${format || 'format'})`,
+    warning: ok ? null : `Deck has ${totalQty} cards (expected ${expected} for ${fmt || 'format'})`,
   };
 }
 
@@ -868,6 +944,17 @@ function initDecksPage() {
 
   const backBtn = document.getElementById('deck-panel-back');
   if (backBtn) backBtn.addEventListener('click', closeDeckPanel);
+
+  const createBtn = document.getElementById('btn-create-deck');
+  if (createBtn) createBtn.addEventListener('click', openDeckCreateModal);
+  const createClose = document.getElementById('deck-create-modal-close');
+  if (createClose) createClose.addEventListener('click', closeDeckCreateModal);
+  const createCancel = document.getElementById('btn-cancel-deck-create');
+  if (createCancel) createCancel.addEventListener('click', closeDeckCreateModal);
+  const createModal = document.getElementById('deck-create-modal');
+  if (createModal) createModal.addEventListener('click', (e) => { if (e.target === createModal) closeDeckCreateModal(); });
+  const createForm = document.getElementById('deck-create-form');
+  if (createForm) createForm.addEventListener('submit', createDeck);
 
   const editBtn = document.getElementById('btn-edit-deck');
   if (editBtn) editBtn.addEventListener('click', openDeckEditModal);
@@ -893,6 +980,22 @@ function initDecksPage() {
       clearTimeout(deckSearchDebounce);
       deckSearchDebounce = setTimeout(searchCollectionForDeck, 300);
     });
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        clearTimeout(deckSearchDebounce);
+        searchCollectionForDeck();
+      }
+    });
+  }
+
+  const slotSel = document.getElementById('deck-card-target-slot');
+  if (slotSel) {
+    slotSel.addEventListener('change', () => { searchCollectionForDeck(); });
+  }
+  const legalToggle = document.getElementById('deck-legal-only');
+  if (legalToggle) {
+    legalToggle.addEventListener('change', () => { searchCollectionForDeck(); });
   }
 }
 
@@ -901,71 +1004,242 @@ function toggleAddCardPanel() {
   if (!panel) return;
   panel.classList.toggle('hidden');
   if (!panel.classList.contains('hidden')) {
+    updateDeckIdentityUI();
     const input = document.getElementById('deck-card-search-input');
     if (input) input.focus();
+    // Browse mode: show legal collection cards immediately without typing
+    if (input && !input.value.trim()) {
+      searchCollectionForDeck();
+    }
   } else {
     const results = document.getElementById('deck-card-search-results');
     if (results) { results.innerHTML = ''; results.classList.add('hidden'); }
+    const preview = document.getElementById('deck-printing-preview');
+    if (preview) { preview.innerHTML = ''; preview.classList.add('hidden'); }
   }
+}
+
+function openDeckCreateModal() {
+  const modal = document.getElementById('deck-create-modal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  const fmtSel = document.getElementById('create-deck-format-select');
+  if (fmtSel) fmtSel.value = 'Commander';
+  const nameInput = document.getElementById('create-deck-name-input');
+  if (nameInput) setTimeout(() => nameInput.focus(), 0);
+}
+
+function closeDeckCreateModal() {
+  document.getElementById('deck-create-modal')?.classList.add('hidden');
+}
+
+async function createDeck(e) {
+  e.preventDefault();
+  const name = (document.getElementById('create-deck-name-input')?.value || '').trim();
+  const format = (document.getElementById('create-deck-format-select')?.value || '').trim() || 'Commander';
+  const description = document.getElementById('create-deck-desc-input')?.value || '';
+  if (!name) { alert('Deck name is required.'); return; }
+  try {
+    const deck = await apiFetch('/api/decks', {
+      method: 'POST',
+      body: JSON.stringify({ name, format, description }),
+    });
+    closeDeckCreateModal();
+    document.getElementById('create-deck-name-input').value = '';
+    document.getElementById('create-deck-desc-input').value = '';
+    loadDeckList();
+    loadNavStats();
+    // Open the new empty deck and start building from the collection
+    await openDeck(deck.id, { keepAddPanel: false, autoOpenBuilder: true });
+  } catch (err) {
+    alert('Could not create deck: ' + err.message);
+  }
+}
+
+function _printingLabel(p) {
+  const set = p.set_code || '—';
+  const num = p.collector_number ? ` #${p.collector_number}` : '';
+  const foil = p.foil ? ' ✦Foil' : '';
+  const qty = p.quantity ? ` ×${p.quantity}` : '';
+  const storage = p.storage_location ? ` @ ${p.storage_location}` : '';
+  return `${set}${num}${foil}${qty}${storage}`;
+}
+
+function _resolveSelectedPrinting(result) {
+  const prints = result.printings || [];
+  if (!prints.length) return null;
+  const selectedId = deckSelectedPrinting[result.name];
+  if (selectedId != null) {
+    const found = prints.find(p => String(p.id) === String(selectedId));
+    if (found) return found;
+  }
+  return prints[0];
+}
+
+function renderPrintingPreview(result) {
+  const previewEl = document.getElementById('deck-printing-preview');
+  if (!previewEl || !result) {
+    if (previewEl) { previewEl.innerHTML = ''; previewEl.classList.add('hidden'); }
+    return;
+  }
+  const printing = _resolveSelectedPrinting(result);
+  const img = printing?.image_uri || result.image_uri || '';
+  previewEl.innerHTML = `
+    <div style="flex-shrink:0;">
+      ${img ? `<img src="${img}" alt="${escHtml(result.name)} printing preview" style="width:120px;height:auto;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.5);display:block;" loading="lazy" onerror="this.style.display='none'" />`
+            : `<div style="width:120px;aspect-ratio:63/88;background:var(--bg-elevated);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:0.75rem;">No image</div>`}
+    </div>
+    <div style="min-width:0;">
+      <div style="font-weight:700;color:#fff;font-size:0.95rem;">${escHtml(result.name)}</div>
+      <div style="font-size:0.8rem;color:var(--text-muted);font-family:var(--font-mono);margin-top:0.2rem;">${escHtml(result.type_line || '')}</div>
+      ${printing ? `<div style="font-size:0.8rem;color:var(--cyan);font-family:var(--font-mono);margin-top:0.3rem;">${escHtml(_printingLabel(printing))}</div>` : ''}
+      <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.3rem;">${result.mana_cost ? formatManaCost(result.mana_cost) + ' ' : ''}${(result.color_identity || []).length ? ` Identity: ${_identitySymbols(result.color_identity)}` : ' Identity: colourless'}</div>
+    </div>`;
+  previewEl.classList.remove('hidden');
 }
 
 async function searchCollectionForDeck() {
   const input = document.getElementById('deck-card-search-input');
   const resultsEl = document.getElementById('deck-card-search-results');
   const q = (input?.value || '').trim();
-  if (!q || q.length < 2 || !currentDeckId) {
+  if (!currentDeckId) {
     if (resultsEl) { resultsEl.innerHTML = ''; resultsEl.classList.add('hidden'); }
     return;
   }
+  // Allow browsing with an empty query (shows collection up to limit)
+  const legalOnly = document.getElementById('deck-legal-only')?.checked !== false;
+  const slot = document.getElementById('deck-card-target-slot')?.value || 'mainboard';
+  const commanderIdentity = _commanderIdentity(currentDeck);
+  const isCommanderAdding = slot === 'commander';
   try {
-    const results = await apiFetch(`/api/collection/search?q=${encodeURIComponent(q)}`);
+    const params = new URLSearchParams({ q, deck_id: String(currentDeckId) });
+    if (!legalOnly || isCommanderAdding) params.set('all', '1');
+    const rawResults = await apiFetch(`/api/collection/search?${params.toString()}`);
+    let results = Array.isArray(rawResults) ? rawResults : [];
+
+    // Client-side legality filter as defence-in-depth (server also filters)
+    if (legalOnly && !isCommanderAdding && Array.isArray(commanderIdentity)) {
+      results = results.filter(r => _isLegalForCommander(r.color_identity || [], commanderIdentity));
+    }
+
+    deckSearchCache = results;
+
     if (!results.length) {
-      resultsEl.innerHTML = `<div style="padding:0.75rem;color:var(--text-muted);font-size:0.85rem;">No collection cards match "${escHtml(q)}".</div>`;
+      const msg = q
+        ? `No collection cards match "${escHtml(q)}".`
+        : `No cards in your collection. Import or add cards first, then build here.`;
+      const legalNote = (legalOnly && !isCommanderAdding && Array.isArray(commanderIdentity))
+        ? ` (Showing only ${_identityLabel(commanderIdentity)} legal cards for this commander.)`
+        : '';
+      resultsEl.innerHTML = `<div style="padding:0.75rem;color:var(--text-muted);font-size:0.85rem;">${msg}${legalNote}</div>`;
       resultsEl.classList.remove('hidden');
+      const preview = document.getElementById('deck-printing-preview');
+      if (preview) { preview.innerHTML = ''; preview.classList.add('hidden'); }
       return;
     }
-    resultsEl.innerHTML = results.map(r => `
-      <div class="search-result-item">
+
+    resultsEl.innerHTML = results.map((r, idx) => {
+      const prints = r.printings || [];
+      const selected = _resolveSelectedPrinting(r);
+      const printingSelect = prints.length > 1 ? `
+        <select class="filter-select printing-picker" data-printing-for="${escHtml(r.name)}" style="padding:0.25rem 0.4rem;font-size:0.78rem;max-width:190px;">
+          ${prints.map(p => `<option value="${p.id}" ${selected && String(p.id) === String(selected.id) ? 'selected' : ''}>${escHtml(_printingLabel(p))}</option>`).join('')}
+        </select>
+      ` : (prints.length === 1 ? `<span class="badge badge-set" title="Owned printing">${escHtml(_printingLabel(prints[0]))}</span>` : '');
+      const previewImg = selected?.image_uri || r.image_uri || '';
+      const identitySymbols = (r.color_identity || []).length
+        ? `<span class="badge badge-set" title="Colour identity">${escHtml((r.color_identity || []).join(''))}</span>`
+        : `<span class="badge badge-set" title="Colourless">◇</span>`;
+      return `
+      <div class="search-result-item" data-result-index="${idx}">
         <div style="display:flex;align-items:center;gap:0.6rem;min-width:0;flex:1;">
-          ${r.image_uri ? `<img src="${r.image_uri}" style="width:30px;height:42px;object-fit:cover;border-radius:3px;flex-shrink:0;" loading="lazy" />` : ''}
+          <img class="printing-thumb" src="${previewImg}" alt="${escHtml(r.name)}" style="width:38px;height:52px;object-fit:cover;border-radius:3px;flex-shrink:0;cursor:zoom-in;" loading="lazy" onerror="this.style.display='none'" data-preview-name="${escHtml(r.name)}" />
           <div style="min-width:0;">
             <div style="font-weight:700;color:#fff;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(r.name)}</div>
-            <div style="font-size:0.75rem;color:var(--text-muted);font-family:var(--font-mono);">${escHtml(r.type_line || '')} • ${escHtml(r.set_code || '')} • Owned ×${r.total_owned}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);font-family:var(--font-mono);">${escHtml(r.type_line || '')} • Owned ×${r.total_owned}${r.printings_count > 1 ? ` • ${r.printings_count} printings` : ''}</div>
+            <div style="display:flex;align-items:center;gap:0.35rem;margin-top:0.25rem;flex-wrap:wrap;">${identitySymbols}${printingSelect}</div>
           </div>
         </div>
         <button class="btn btn-primary btn-sm" data-add-card="${escHtml(r.name)}">➕ Add</button>
       </div>
-    `).join('');
+    `;
+    }).join('');
     resultsEl.classList.remove('hidden');
+
+    // Preview first result by default
+    if (results[0]) renderPrintingPreview(results[0]);
+
+    // Printing pickers → update preview + selected printing
+    resultsEl.querySelectorAll('.printing-picker').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const name = sel.dataset.printingFor;
+        deckSelectedPrinting[name] = sel.value;
+        const result = deckSearchCache.find(r => r.name === name);
+        if (!result) return;
+        // Update thumb + preview
+        const item = sel.closest('.search-result-item');
+        const thumb = item?.querySelector('.printing-thumb');
+        const printing = _resolveSelectedPrinting(result);
+        if (thumb && printing?.image_uri) thumb.src = printing.image_uri;
+        renderPrintingPreview(result);
+      });
+    });
+    // Hover/click thumb → preview that card (single-printing rows too)
+    resultsEl.querySelectorAll('.printing-thumb').forEach(img => {
+      const show = () => {
+        const name = img.dataset.previewName;
+        const result = deckSearchCache.find(r => r.name === name);
+        if (result) renderPrintingPreview(result);
+      };
+      img.addEventListener('mouseenter', show);
+      img.addEventListener('click', show);
+    });
+
     resultsEl.querySelectorAll('[data-add-card]').forEach(btn => {
-      btn.addEventListener('click', () => addCardToDeck(btn.dataset.addCard));
+      btn.addEventListener('click', () => {
+        const name = btn.dataset.addCard;
+        const result = deckSearchCache.find(r => r.name === name);
+        const printing = result ? _resolveSelectedPrinting(result) : null;
+        addCardToDeck(name, printing ? { printingId: printing.id, scryfallId: printing.scryfall_id, setCode: printing.set_code, imageUri: printing.image_uri } : null);
+      });
     });
   } catch (e) {
     if (resultsEl) resultsEl.innerHTML = `<div style="padding:0.75rem;color:var(--pink);">Search failed: ${escHtml(e.message)}</div>`;
   }
 }
 
-async function addCardToDeck(cardName) {
+async function addCardToDeck(cardName, printingInfo) {
   if (!currentDeckId) return;
   const slotEl = document.getElementById('deck-card-target-slot');
   const qtyEl = document.getElementById('deck-card-target-qty');
   const slot = slotEl ? slotEl.value : 'mainboard';
   const qty = Math.max(1, parseInt(qtyEl?.value || '1', 10) || 1);
+  const payload = {
+    name: cardName,
+    quantity: qty,
+    is_commander: slot === 'commander',
+    is_sideboard: slot === 'sideboard',
+  };
+  if (printingInfo && printingInfo.printingId) payload.collection_card_id = printingInfo.printingId;
+  if (printingInfo && printingInfo.scryfallId) payload.scryfall_id = printingInfo.scryfallId;
+  if (printingInfo && printingInfo.setCode) payload.set_code = printingInfo.setCode;
+  if (printingInfo && printingInfo.imageUri) payload.image_uri = printingInfo.imageUri;
   try {
     await apiFetch(`/api/decks/${currentDeckId}/cards`, {
       method: 'POST',
-      body: JSON.stringify({
-        name: cardName,
-        quantity: qty,
-        is_commander: slot === 'commander',
-        is_sideboard: slot === 'sideboard',
-      }),
+      body: JSON.stringify(payload),
     });
     await openDeck(currentDeckId, { keepAddPanel: true });
+    updateDeckIdentityUI();
     const input = document.getElementById('deck-card-search-input');
     if (input) input.focus();
   } catch (e) {
-    alert('Could not add card: ' + e.message);
+    // Colour-identity rejection carries a helpful server message
+    if (e.message && e.message.includes('not legal')) {
+      alert(e.message);
+    } else {
+      alert('Could not add card: ' + e.message);
+    }
   }
 }
 
@@ -974,15 +1248,17 @@ function openDeckEditModal() {
   const modal = document.getElementById('deck-edit-modal');
   document.getElementById('edit-deck-name-input').value = currentDeck.name || '';
   const fmtSel = document.getElementById('edit-deck-format-select');
-  const curFormat = currentDeck.format || '';
-  // Preserve unknown formats (e.g. legacy values) by adding an option on the fly
+  const rawFormat = (currentDeck.format || '').trim();
+  // Empty or legacy numeric values (e.g. "3") default to Commander.
+  const curFormat = (!rawFormat || /^\d+$/.test(rawFormat)) ? 'Commander' : rawFormat;
+  // Preserve unknown formats by adding an option on the fly
   if (curFormat && !Array.from(fmtSel.options).some(o => o.value === curFormat)) {
     const opt = document.createElement('option');
     opt.value = curFormat;
     opt.textContent = curFormat;
     fmtSel.appendChild(opt);
   }
-  fmtSel.value = curFormat;
+  fmtSel.value = curFormat || 'Commander';
   document.getElementById('edit-deck-desc-input').value = currentDeck.description || '';
   modal.classList.remove('hidden');
 }
@@ -995,7 +1271,7 @@ async function saveDeckEdit(e) {
   e.preventDefault();
   if (!currentDeckId) return;
   const name = document.getElementById('edit-deck-name-input').value.trim();
-  const format = document.getElementById('edit-deck-format-select').value;
+  const format = (document.getElementById('edit-deck-format-select').value || '').trim() || 'Commander';
   const description = document.getElementById('edit-deck-desc-input').value;
   if (!name) { alert('Deck name is required.'); return; }
   try {
@@ -1038,13 +1314,15 @@ async function loadDeckList() {
         : warn
           ? `<span class="badge badge-size-warning" title="${escHtml(warn)}">⚠️ ${deck.total_cards ?? deck.card_count}/${check.expected}</span>`
           : `<span class="badge badge-qty" title="Deck size matches expected ${check.expected}">✓ ${deck.total_cards ?? deck.card_count}/${check.expected}</span>`;
+      const displayFormat = (deck.format || '').trim();
+      const safeFormat = (!displayFormat || /^\d+$/.test(displayFormat)) ? 'Commander' : displayFormat;
       return `
         <div class="deck-card" data-id="${deck.id}">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.5rem;">
             <div class="deck-card-name">${escHtml(deck.name)}</div>
             ${sizeBadge}
           </div>
-          ${deck.format ? `<span class="format-badge" style="margin-left:0;">${escHtml(deck.format)}</span>` : ''}
+          <span class="format-badge" style="margin-left:0;">${escHtml(safeFormat)}</span>
           <div class="deck-card-count">${total} cards (${unique} unique)${warn ? `<div style="color:var(--warning);font-size:0.78rem;margin-top:0.3rem;" title="${escHtml(warn)}">⚠️ ${escHtml(warn)}</div>` : ''}</div>
         </div>
       `;
@@ -1061,22 +1339,26 @@ async function loadDeckList() {
 
 async function openDeck(deckId, opts = {}) {
   const keepAddPanel = opts.keepAddPanel || false;
+  const autoOpenBuilder = opts.autoOpenBuilder || false;
   currentDeckId = deckId;
   document.getElementById('deck-list').classList.add('hidden');
   const panel = document.getElementById('deck-panel');
   panel.classList.remove('hidden');
   document.getElementById('deck-panel-cards').innerHTML = '<div class="loading-state">Loading…</div>';
-  if (!keepAddPanel) {
+  if (!keepAddPanel && !autoOpenBuilder) {
     document.getElementById('deck-add-card-panel')?.classList.add('hidden');
     const s = document.getElementById('deck-card-search-input');
     if (s) s.value = '';
+    const results = document.getElementById('deck-card-search-results');
+    if (results) { results.innerHTML = ''; results.classList.add('hidden'); }
   }
 
   try {
     const deck = await apiFetch(`/api/decks/${deckId}`);
     currentDeck = deck;
     document.getElementById('deck-panel-name').textContent = deck.name;
-    document.getElementById('deck-panel-format').textContent = deck.format || '';
+    const deckFormat = (deck.format || '').trim();
+    document.getElementById('deck-panel-format').textContent = (!deckFormat || /^\d+$/.test(deckFormat)) ? 'Commander' : deckFormat;
     document.getElementById('deck-panel-desc').textContent = deck.description || '';
 
     const totalQty = deck.cards.reduce((sum, c) => sum + (c.quantity || 1), 0);
@@ -1102,6 +1384,17 @@ async function openDeck(deckId, opts = {}) {
     }
 
     renderDeckCards(deck.cards);
+    updateDeckIdentityUI();
+
+    if (autoOpenBuilder) {
+      const addPanel = document.getElementById('deck-add-card-panel');
+      if (addPanel && addPanel.classList.contains('hidden')) {
+        toggleAddCardPanel();
+      } else {
+        searchCollectionForDeck();
+      }
+      document.getElementById('deck-card-search-input')?.focus();
+    }
 
     document.getElementById('deck-panel-delete').onclick = async () => {
       if (!confirm(`Delete deck "${deck.name}"? This cannot be undone.`)) return;
@@ -1289,6 +1582,9 @@ async function updateDeckCardRole(deckCardId, role) {
     });
     await openDeck(currentDeckId, { keepAddPanel: true });
     loadDeckList();
+    // Commander identity may have changed — refresh builder filter
+    const panel = document.getElementById('deck-add-card-panel');
+    if (panel && !panel.classList.contains('hidden')) searchCollectionForDeck();
   } catch (e) {
     alert('Could not move card: ' + e.message);
   }
@@ -1301,6 +1597,8 @@ async function deleteDeckCard(deckCardId) {
     await openDeck(currentDeckId, { keepAddPanel: true });
     loadDeckList();
     loadNavStats();
+    const panel = document.getElementById('deck-add-card-panel');
+    if (panel && !panel.classList.contains('hidden')) searchCollectionForDeck();
   } catch (e) {
     alert('Could not remove card: ' + e.message);
   }

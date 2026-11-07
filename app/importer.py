@@ -238,9 +238,7 @@ def _resolve_card(entry: dict, card_map: dict) -> dict | None:
 
 def import_collection(
     text: str,
-    default_condition: str = 'NM',
     default_storage: str = '',
-    default_purchase_price: float = None,
 ) -> dict:
     """
     Parse and import a collection text block into the database.
@@ -275,7 +273,7 @@ def import_collection(
             existing = Card.query.filter_by(
                 scryfall_id=scryfall_id,
                 foil=foil,
-                condition=default_condition,
+                condition='NM',
                 storage_location=storage,
             ).first()
 
@@ -285,9 +283,8 @@ def import_collection(
             card = Card(
                 quantity=entry['quantity'],
                 foil=foil,
-                condition=default_condition,
+                condition='NM',
                 storage_location=storage,
-                purchase_price=default_purchase_price,
                 **card_data,
             )
             db.session.add(card)
@@ -303,7 +300,7 @@ def import_collection(
 def import_deck(
     text: str,
     deck_name: str,
-    deck_format: str = '',
+    deck_format: str = 'Commander',
     description: str = '',
     add_to_collection: bool = True,
     collection_storage: str = '',
@@ -329,6 +326,12 @@ def import_deck(
         description = description or archidekt_data['description']
     else:
         sections = parse_deck_text(text)
+
+    # Default to Commander when no format was selected (or a legacy numeric
+    # value such as "3" was supplied by an earlier build / Archidekt).
+    _fmt = (deck_format or '').strip() if isinstance(deck_format, str) else str(deck_format).strip()
+    if not _fmt or _fmt.isdigit():
+        deck_format = 'Commander'
 
     all_entries = sections['mainboard'] + sections['sideboard'] + sections['commander']
 
@@ -370,6 +373,7 @@ def import_deck(
                 type_line=card_data.get('type_line'),
                 mana_cost=card_data.get('mana_cost'),
                 colors=card_data.get('colors'),
+                color_identity=card_data.get('color_identity'),
             )
             db.session.add(deck_card)
 

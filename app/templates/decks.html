@@ -4,7 +4,10 @@
 {% block content %}
 <div class="page-header">
   <h1 class="page-title">My Decks</h1>
-  <span class="result-count" id="deck-count">Loading…</span>
+  <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
+    <span class="result-count" id="deck-count">Loading…</span>
+    <button id="btn-create-deck" class="btn btn-primary btn-sm">＋ New Deck</button>
+  </div>
 </div>
 
 <div id="deck-list" class="deck-list">
@@ -30,6 +33,7 @@
     </div>
     <p id="deck-panel-desc" class="deck-desc"></p>
     <div id="deck-size-warning"></div>
+    <div id="deck-identity-banner" class="deck-identity-banner" style="margin-top:0.5rem;"></div>
     <p class="form-hint" style="margin-top:0.5rem;">
       Removing a card here only removes it from this deck — it stays in your collection. To remove it from the collection, open the Collection tab.
       Commander decks expect 100 cards; most other formats expect 60; Draft / Sealed expects 40.
@@ -41,6 +45,10 @@
         <div style="font-weight:700; color:var(--cyan); font-size:0.95rem;">➕ Add Cards to this Deck from your Collection</div>
         <button id="btn-close-add-card" class="btn btn-ghost btn-sm" style="padding:2px 8px;">✕</button>
       </div>
+      <div id="deck-builder-note" class="form-hint" style="margin-bottom:0.5rem;">
+        Only cards you own are shown. Pick a printing to preview its art before adding.
+        <span id="deck-builder-identity"></span>
+      </div>
       <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
         <input type="text" id="deck-card-search-input" class="filter-input" placeholder="Type card name from collection (e.g. Sol Ring, Cyclonic Rift)…" style="flex:1; min-width:240px;" autocomplete="off" />
         <select id="deck-card-target-slot" class="filter-select">
@@ -50,11 +58,55 @@
         </select>
         <input type="number" id="deck-card-target-qty" class="filter-input" value="1" min="1" max="99" style="width:65px;" title="Quantity" />
       </div>
+      <label id="deck-identity-toggle-wrap" style="display:flex;align-items:center;gap:0.4rem;margin-top:0.5rem;font-size:0.82rem;color:var(--text-muted);cursor:pointer;">
+        <input type="checkbox" id="deck-legal-only" checked style="accent-color:var(--accent);" />
+        Only show commander-legal cards (colour identity)
+      </label>
+      <div id="deck-printing-preview" class="deck-printing-preview hidden" style="margin-top:0.75rem;display:flex;gap:0.75rem;align-items:flex-start;"></div>
       <div id="deck-card-search-results" class="deck-card-search-results hidden" style="margin-top:0.75rem; max-height:260px; overflow-y:auto;"></div>
     </div>
   </div>
 
   <div id="deck-panel-cards" class="deck-card-sections"></div>
+</div>
+
+<!-- Create Deck Modal (build without importing) -->
+<div id="deck-create-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-box" style="max-width: 480px;">
+    <button class="modal-close" id="deck-create-modal-close" aria-label="Close">✕</button>
+    <div style="padding: 1.5rem;">
+      <h3 style="margin-top:0; color:#fff; font-size:1.2rem; margin-bottom:1rem;">＋ New Deck</h3>
+      <p class="form-hint">Create an empty deck and build it only from cards in your collection — no import needed.</p>
+      <form id="deck-create-form">
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label class="form-label">Deck Name *</label>
+          <input type="text" id="create-deck-name-input" class="filter-input" style="width:100%;" required placeholder="My Commander Deck" />
+        </div>
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label class="form-label">Format</label>
+          <select id="create-deck-format-select" class="filter-select" style="width:100%;">
+            <option value="Commander" selected>Commander / EDH (100 cards)</option>
+            <option value="Standard">Standard (60)</option>
+            <option value="Modern">Modern (60)</option>
+            <option value="Pioneer">Pioneer (60)</option>
+            <option value="Legacy">Legacy (60)</option>
+            <option value="Vintage">Vintage (60)</option>
+            <option value="Pauper">Pauper (60)</option>
+            <option value="Draft">Draft / Sealed (40)</option>
+            <option value="Casual">Casual / Other (60)</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:1.5rem;">
+          <label class="form-label">Description / Notes</label>
+          <textarea id="create-deck-desc-input" class="filter-input" rows="3" style="width:100%;" placeholder="Strategy, power level, or deck notes…"></textarea>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:0.5rem;">
+          <button type="button" id="btn-cancel-deck-create" class="btn btn-ghost">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create &amp; Start Building</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 
 <!-- Edit Deck Modal -->
@@ -71,7 +123,7 @@
         <div class="form-group" style="margin-bottom:1rem;">
           <label class="form-label">Format</label>
           <select id="edit-deck-format-select" class="filter-select" style="width:100%;">
-            <option value="Commander">Commander / EDH (100 cards)</option>
+            <option value="Commander" selected>Commander / EDH (100 cards)</option>
             <option value="Standard">Standard (60)</option>
             <option value="Modern">Modern (60)</option>
             <option value="Pioneer">Pioneer (60)</option>
@@ -80,7 +132,6 @@
             <option value="Pauper">Pauper (60)</option>
             <option value="Draft">Draft / Sealed (40)</option>
             <option value="Casual">Casual / Other (60)</option>
-            <option value="">— No format —</option>
           </select>
         </div>
         <div class="form-group" style="margin-bottom:1.5rem;">

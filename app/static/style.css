@@ -89,8 +89,8 @@ code {
 .nav-logo-img {
   width: 32px;
   height: 32px;
-  border-radius: 50%;
-  object-fit: cover;
+  border-radius: 8px;
+  object-fit: contain;
   border: 1px solid rgba(0, 240, 255, 0.4);
   box-shadow: 0 0 10px rgba(0, 240, 255, 0.35);
   filter: drop-shadow(0 0 6px rgba(0, 240, 255, 0.4));
@@ -621,6 +621,15 @@ code {
 }
 .empty-state .empty-icon { font-size: 3rem; display: block; margin-bottom: 0.75rem; }
 
+/* Empty state inside the spreadsheet table — matches the picture/grid view */
+.spreadsheet-table tbody tr.table-empty-row,
+.spreadsheet-table tbody tr.table-empty-row:hover {
+  cursor: default;
+  background: transparent;
+}
+.spreadsheet-table .table-empty-cell { padding: 0; }
+.spreadsheet-table .empty-state { padding: 3rem 1rem; }
+
 /* ── Card Detail Modal ─────────────────────────────────────────────────────── */
 .modal-overlay {
   position: fixed;
@@ -1011,6 +1020,22 @@ code {
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 6px;
   overflow: hidden;
+}
+
+.deck-identity-banner .badge {
+  white-space: normal;
+  line-height: 1.4;
+}
+
+.deck-printing-preview {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  padding: 0.65rem;
+}
+
+.printing-picker {
+  max-width: 100%;
 }
 
 .hidden { display: none !important; }

@@ -43,15 +43,17 @@ To make that work seamlessly in real life, you need an application that:
 - The spreadsheet and grid show `×N` plus a `N printings` badge when relevant (e.g. `Sol Ring ×4 • 4 printings`). Navbar `unique` counts distinct names, not rows.
 - The detail modal lists every printing with per-printing quantity, foil toggle, storage, and delete. *Save Changes* writes each printing individually. Deleting one printing removes only that row; **deleting the last copy of a name also removes deck slots for that name**. Removing a card *from a deck* never touches the Collection.
 
-### C. Deck Editing from the Collection
+### C. Deck Building from the Collection (no import needed)
 
-- **Deck list:** Each card shows format, `total (unique)` counts, and a size badge — `✓ 100/100` when correct or `⚠️ 100/60` plus an explanatory line when not. Expected sizes: **100 Commander/EDH, 60 most formats, 40 Draft/Sealed**. No badge for empty format or legacy numeric values (e.g. `3`) until a proper format is set.
+- **Deck list:** Each card shows format, `total (unique)` counts, and a size badge — `✓ 100/100` when correct or `⚠️ 100/60` plus an explanatory line when not. Expected sizes: **100 Commander/EDH, 60 most formats, 40 Draft/Sealed**. Empty or legacy numeric values (e.g. `3`) default to **Commander** (100).
+- **Create without importing:** *＋ New Deck* in the Decks header opens a name/format/description form (Commander default) that calls `POST /api/decks` for an empty deck, then jumps straight into the builder.
 - **Deck detail panel:**
   - *Edit Deck* modal — rename, choose format (Commander, Standard, Modern, Pioneer, Legacy, Vintage, Pauper, Draft/Sealed, Casual/Other), and edit description/notes.
-  - *Add Card from Collection* panel — search owned cards (debounced, shows image, type, set, and `Owned ×N` summed across printings), pick Mainboard / Commander / Sideboard and quantity, and add. Adding an existing slot increments its quantity.
+  - *Add Card from Collection* builder — **only owned cards** (browsable without typing, plus live search), each result shows image, type, colour identity, and `Owned ×N`. For multi-printing names a **printing picker** (set / number / foil / storage) plus a large **art preview** lets you pin the exact copy before adding. Pick Mainboard / Commander / Sideboard and quantity, and add. Adding an existing slot increments its quantity (and updates the pinned printing). Adding a non-owned name is rejected (`POST` returns 400).
+  - **Commander colour identity:** when a Commander is set, the builder-banner shows its identity and results are filtered to cards whose colour identity is a **subset** of the commander’s (e.g. mono-blue → blue + colourless only; Azorius WU → W, U, WU, and colourless). A “only show commander-legal cards” toggle can temporarily show everything, but `POST` still enforces legality for Commander decks (EDHREC has no stable colour-identity API, so this uses the Scryfall `color_identity` already cached in SQLite).
   - Per-card controls — `−`/`+` quantity (0 prompts to remove from deck), `👑` Commander toggle, `📦` Sideboard toggle (moving to Mainboard clears both), `✕` remove from deck. Clicking the card info opens the Scryfall-backed detail view.
   - *Delete Deck* removes only the `Deck` + `DeckCard` rows, never the Collection.
-- **APIs:** `PUT /api/decks/<id>` (name/format/description), `POST /api/decks/<id>/cards`, `PUT`/`DELETE /api/decks/<id>/cards/<id>`, `GET /api/collection/search`. The server resolves metadata from the Collection first (falling back to Scryfall data passed from the client).
+- **APIs:** `POST /api/decks` (create empty), `PUT /api/decks/<id>` (name/format/description), `POST /api/decks/<id>/cards` (`collection_card_id` pins the printing, colour-checked, collection-only), `PUT`/`DELETE /api/decks/<id>/cards/<id>`, `GET /api/collection/search?q=&deck_id=&all=` (owned + printings + identity). The server resolves metadata from the selected Collection printing.
 
 ### D. SORTING Multi-Deck Overlap Engine
 
@@ -65,7 +67,7 @@ To make that work seamlessly in real life, you need an application that:
 
 - **Local SORTING tool:** Complete offline-friendly sleeve-marking tool for local use (no external build site required).
 - **1-Click Local Database Sync:** Import all decks directly from your collection database (`GET /api/sorting/sync-data`) without having to re-paste decklists. State is stored in `localStorage`.
-- **Visual Sleeve Stripes:** Renders the physical sleeve edge with designated color markers for each deck in the modular pool.
+- **Visual Sleeve Stripes:** Renders the physical sleeve edge with designated color markers for each deck in the modular pool. **48 stripe colours** (PRISM-compatible: one colour + one slot per deck, up to 48 decks on one sleeve; 96 with dot splits) modelled on the single purchasable [Betem 48 Colors Dual Tip set on Amazon.ca (B0BR3XX6NC, $29.99)](https://www.amazon.ca/dp/B0BR3XX6NC) — no single Uni Posca 48-set exists there (largest are 29/24 colours) — with slot-numbered swatches and adaptive sleeve previews (slots shrink as the pool grows).
 - **Interactive Overlap Matrix:** Visual pairwise matrix displaying shared card counts across all decks.
 - **SCRY-Mode:** Fullscreen card-by-card marking walkthrough with "Done" and "Skip" triggers.
 - **Printable Guide & CSV Export:** Generate print-ready guides for deckboxes and CSV backups, plus full JSON backup/restore.
@@ -105,7 +107,7 @@ To make that work seamlessly in real life, you need an application that:
 | **Separate `Card` vs `DeckCard` Models** | A physical card in your collection (`Card`) exists independently of a slot in a decklist (`DeckCard`). Multiple decks can reference the same card without duplicating physical inventory entries. Removing from a deck keeps the collection intact; removing the last collection copy clears deck slots. |
 | **Clump by Name in the API** | `GET /api/collection` groups `Card` rows by `name` so printings are managed together while per-printing rows persist. Deck membership and SORTING overlaps also match by name, so different printings are interchangeable for deckbuilding. |
 | **Normalized Name Matching for Overlaps** | SORTING overlap queries group by `DeckCard.name`. Regardless of whether Deck A uses an original printing and Deck B uses a promo printing, the system recognizes that the physical card can be shared between them. |
-| **Deck-Size Guardrails** | `Deck.expected_size()` (100 Commander, 40 Draft/Sealed, 60 others, `null` for empty/numeric) is returned by the API and rendered as `✓`/`⚠️` in the deck list and detail, preventing silent 99- or 101-card Commander decks. |
+| **Deck-Size Guardrails** | `Deck.expected_size()` (100 Commander, 40 Draft/Sealed, 60 others, defaulting empty/numeric to Commander) is returned by the API and rendered as `✓`/`⚠️` in the deck list and detail, preventing silent 99- or 101-card Commander decks. |
 | **Local SQLite + Docker Architecture** | Built to run 24/7 on a home server or NAS (such as TrueNAS) via Docker Compose. Card collections and personal financial records remain 100% private and offline-capable without relying on external cloud subscriptions. |
 | **Vanilla Frontend (No Heavy Frameworks)** | Built with Jinja2 templates, standard modern JavaScript, and clean CSS. This eliminates frontend build pipelines (npm, webpack, vite), ensuring the app remains lightweight, fast, and maintainable for years to come. |
 | **Server-Side API Proxying** | All Scryfall lookups are executed server-side with proper user-agent headers and caching to stay compliant with Scryfall API guidelines and prevent browser CORS issues. |
@@ -117,7 +119,7 @@ To make that work seamlessly in real life, you need an application that:
 1. **Import Your Decks:** Go to the **Import** tab and paste the Archidekt URLs or decklists for all of your active Commander or Constructed decks. Check *Also add cards to Collection* for new acquisitions.
 2. **Review the SORTING Shared Pool:** Navigate to the **Collection** tab and select **⚡ SORTING Shared (2+ decks)** from the deck dropdown.
 3. **Organize Physical Cards:** These shared cards become your primary SORTING pool. Open each clumped card, verify its printings (e.g. `Sol Ring ×4 • 4 printings`), and update the storage location per printing (e.g. `SORTING Case - Staple Tray`).
-4. **Adjust Decks:** In the **Decks** tab, rename decks, set formats, and use *Add Card from Collection* to tweak lists. Watch the `✓`/`⚠️` size badge — Commander should read `100/100`.
+4. **Build or Adjust Decks:** In the **Decks** tab, use *＋ New Deck* to start a deck from scratch (or import via **Import** if you have a list) and build it only from your collection — pin a printing for each card and let the Commander colour-identity filter keep the 99 legal. Rename decks and set formats as needed. Watch the `✓`/`⚠️` size badge — Commander should read `100/100`.
 5. **Build & Play:** In the **SORTING Builder**, *Load from Local Collection* and use the marking table / SCRY-mode to stripe sleeves by deck color. When packing a deck for game night, reference the deck view to see which cards are pulled from your SORTING tray into that deck's sleeve module.
 
 ---

@@ -87,18 +87,57 @@ class Deck(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
-    format = db.Column(db.String(50))                       # e.g. "Commander", "Modern"
+    format = db.Column(db.String(50), default='Commander')   # e.g. "Commander", "Modern"
     description = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     cards = db.relationship('DeckCard', back_populates='deck',
                             cascade='all, delete-orphan', lazy='dynamic')
 
+    def normalized_format(self):
+        """Return the display format, defaulting legacy/empty/numeric values to Commander.
+
+        An earlier build stored a legacy numeric value such as ``"3"`` when no
+        format was chosen; treat any empty or digit-only value as Commander.
+        """
+        raw = (self.format or '').strip()
+        if not raw or raw.isdigit():
+            return 'Commander'
+        return self.format
+
+    def is_commander_format(self):
+        fmt = self.normalized_format().strip().lower()
+        return 'commander' in fmt or 'edh' in fmt
+
+    def commander_color_identity(self):
+        """Union of commander colour identities for this deck.
+
+        Returns ``None`` when no commander is set (no restriction), otherwise a
+        set of WUBRG letters (empty set means a colourless commander).
+        Falls back to the collection row when the DeckCard has no identity stored.
+        """
+        commanders = DeckCard.query.filter_by(deck_id=self.id, is_commander=True).all()
+        if not commanders:
+            return None
+        identity = set()
+        for dc in commanders:
+            dc_identity = set()
+            stored = (getattr(dc, 'color_identity', None) or '').strip()
+            if stored:
+                dc_identity = {c.strip().upper() for c in stored.split(',') if c.strip().upper() in ('W', 'U', 'B', 'R', 'G')}
+            else:
+                # Fall back to collection row (source of truth for colour identity)
+                col = Card.query.filter_by(name=dc.name).first()
+                if col is not None and col.color_identity:
+                    dc_identity = {c.strip().upper() for c in col.color_identity.split(',') if c.strip().upper() in ('W', 'U', 'B', 'R', 'G')}
+                elif dc.colors:
+                    dc_identity = {c.strip().upper() for c in dc.colors.split(',') if c.strip().upper() in ('W', 'U', 'B', 'R', 'G')}
+            identity.update(dc_identity)
+        return identity
+
     def expected_size(self):
         """Standard deck size: 100 Commander/EDH, 40 Draft/Sealed, 60 most others."""
-        fmt = (self.format or '').strip().lower()
-        if not fmt or fmt.isdigit():
-            return None
+        fmt = self.normalized_format().strip().lower()
         if 'commander' in fmt or 'edh' in fmt:
             return 100
         if 'draft' in fmt or 'sealed' in fmt:
@@ -108,12 +147,14 @@ class Deck(db.Model):
     def to_dict(self):
         total_qty = db.session.query(db.func.sum(DeckCard.quantity)).filter_by(deck_id=self.id).scalar() or 0
         unique_cnt = self.cards.count()
+        format = self.normalized_format()
         expected = self.expected_size()
         size_ok = (expected is None) or (total_qty == expected)
+        cmd_identity = self.commander_color_identity()
         return {
             'id': self.id,
             'name': self.name,
-            'format': self.format,
+            'format': format,
             'description': self.description,
             'card_count': total_qty,
             'total_cards': total_qty,
@@ -122,8 +163,10 @@ class Deck(db.Model):
             'size_ok': size_ok,
             'size_warning': (
                 None if size_ok or expected is None
-                else f"Deck has {total_qty} cards (expected {expected} for {self.format})"
+                else f"Deck has {total_qty} cards (expected {expected} for {format})"
             ),
+            # None → no commander set (no colour restriction); [] → colourless commander
+            'commander_color_identity': sorted(cmd_identity) if cmd_identity is not None else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
 
@@ -144,6 +187,7 @@ class DeckCard(db.Model):
     type_line = db.Column(db.String(300))
     mana_cost = db.Column(db.String(100))
     colors = db.Column(db.String(50))
+    color_identity = db.Column(db.String(50))
 
     deck = db.relationship('Deck', back_populates='cards')
 
@@ -161,4 +205,5 @@ class DeckCard(db.Model):
             'type_line': self.type_line,
             'mana_cost': self.mana_cost,
             'colors': self.colors.split(',') if self.colors else [],
+            'color_identity': self.color_identity.split(',') if self.color_identity else [],
         }

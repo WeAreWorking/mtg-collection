@@ -8,6 +8,82 @@ from . import importer
 main = Blueprint('main', __name__)
 
 
+def _ensure_db():
+    """Create tables if the DB file is new/missing (fresh install, deleted file).
+
+    On first launch (or if ``data/collection.db`` was removed), the collection
+    API should return an empty list — which the frontend renders as
+    "No cards found in databanks. Try adjusting your filters or import some
+    cards." — rather than a 500 "no such table" error.
+    """
+    try:
+        db.create_all()
+    except Exception:
+        pass
+
+
+_WUBRG = ('W', 'U', 'B', 'R', 'G')
+
+
+def _parse_color_identity(value):
+    """Parse "W,U" / ["W","U"] / None into a set of WUBRG letters."""
+    if value is None:
+        return set()
+    if isinstance(value, (list, tuple, set)):
+        parts = list(value)
+    else:
+        parts = str(value).split(',')
+    result = set()
+    for p in parts:
+        c = str(p).strip().upper()
+        if c in _WUBRG:
+            result.add(c)
+    return result
+
+
+def _card_color_identity(col_card, fallback=None):
+    """Colour identity for a Card row, with explicit fallback override support."""
+    if fallback is not None and str(fallback).strip():
+        return _parse_color_identity(fallback)
+    if col_card is not None:
+        return _parse_color_identity(col_card.color_identity) if col_card.color_identity else set()
+    return _parse_color_identity(fallback)
+
+
+def _get_commander_identity(deck):
+    """Commander colour identity set for a Deck, or None if no commander set."""
+    try:
+        return deck.commander_color_identity()
+    except Exception:
+        # Fallback for rows created before DeckCard.color_identity existed
+        cmds = DeckCard.query.filter_by(deck_id=deck.id, is_commander=True).all()
+        if not cmds:
+            return None
+        identity = set()
+        for dc in cmds:
+            col = Card.query.filter_by(name=dc.name).first()
+            if col is not None and col.color_identity:
+                identity.update(_parse_color_identity(col.color_identity))
+            elif dc.colors:
+                identity.update(_parse_color_identity(dc.colors))
+        return identity
+
+
+def _is_commander_deck(deck):
+    try:
+        return deck.is_commander_format()
+    except Exception:
+        fmt = (deck.format or '').strip().lower()
+        return 'commander' in fmt or 'edh' in fmt or not fmt or fmt.isdigit()
+
+
+def _color_identity_legal(card_identity, commander_identity):
+    """True when card_identity is a subset of commander_identity (colourless ⊆ anything)."""
+    if commander_identity is None:
+        return True
+    return set(card_identity or set()).issubset(set(commander_identity or set()))
+
+
 # ── Page routes ───────────────────────────────────────────────────────────────
 
 @main.route('/')
@@ -54,6 +130,8 @@ def api_collection():
         page        — page number (default: 1)
         per_page    — results per page (default: 60)
     """
+    _ensure_db()
+
     q = request.args.get('q', '').strip()
     color = request.args.get('color', '').strip()
     set_code = request.args.get('set_code', '').strip().upper()
@@ -280,6 +358,7 @@ def api_card_delete(card_id):
 @main.route('/api/collection/storage-locations')
 def api_storage_locations():
     """Return all distinct storage location values for use in filter dropdowns."""
+    _ensure_db()
     rows = (
         db.session.query(Card.storage_location)
         .filter(Card.storage_location != None, Card.storage_location != '')
@@ -312,9 +391,7 @@ def api_import_collection():
 
     result = importer.import_collection(
         text=text,
-        default_condition=data.get('condition', 'NM'),
         default_storage=data.get('storage', ''),
-        default_purchase_price=data.get('purchase_price') or None,
     )
     return jsonify(result)
 
@@ -332,7 +409,7 @@ def api_import_deck():
     result = importer.import_deck(
         text=text,
         deck_name=name,
-        deck_format=data.get('format', ''),
+        deck_format=(data.get('format') or '').strip() or 'Commander',
         description=data.get('description', ''),
         add_to_collection=data.get('add_to_collection', True),
         collection_storage=data.get('storage', ''),
@@ -372,8 +449,27 @@ def api_sorting_shared():
 
 @main.route('/api/decks')
 def api_decks():
+    _ensure_db()
     decks = Deck.query.order_by(Deck.created_at.desc()).all()
     return jsonify([d.to_dict() for d in decks])
+
+
+@main.route('/api/decks', methods=['POST'])
+def api_deck_create():
+    """Create a new empty deck without importing (deck builder entry point)."""
+    _ensure_db()
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'Deck name is required'}), 400
+    fmt_raw = data.get('format')
+    fmt = fmt_raw.strip() if isinstance(fmt_raw, str) else (str(fmt_raw).strip() if fmt_raw is not None else '')
+    deck_format = fmt if fmt and not fmt.isdigit() else 'Commander'
+    description = data.get('description') or ''
+    deck = Deck(name=name, format=deck_format, description=description)
+    db.session.add(deck)
+    db.session.commit()
+    return jsonify(deck.to_dict()), 201
 
 
 @main.route('/api/decks/<int:deck_id>')
@@ -404,7 +500,8 @@ def api_deck_edit(deck_id):
         deck.name = name
 
     if 'format' in data:
-        deck.format = data['format'].strip()
+        _fmt = (data['format'] or '').strip() if isinstance(data['format'], str) else str(data['format']).strip()
+        deck.format = _fmt if _fmt and not _fmt.isdigit() else 'Commander'
 
     if 'description' in data:
         deck.description = data['description']
@@ -415,16 +512,77 @@ def api_deck_edit(deck_id):
 
 @main.route('/api/decks/<int:deck_id>/cards', methods=['POST'])
 def api_deck_card_add(deck_id):
-    """Add a card to the deck (from collection or manual add)."""
+    """Add a card to the deck from the collection (printing-aware, colour-checked).
+
+    Accepts an optional ``collection_card_id`` / ``printing_id`` to pin the exact
+    printing (set, foil, image, storage) already owned. Only cards present in the
+    collection may be added — the deck builder has no manual-name path.
+    """
     deck = Deck.query.get_or_404(deck_id)
     data = request.get_json() or {}
-    name = data.get('name', '').strip()
+    name = (data.get('name') or '').strip()
+
+    # Resolve selected printing first (id takes precedence over name)
+    printing_id = data.get('collection_card_id') or data.get('printing_id') or data.get('card_id')
+    col_card = None
+    if printing_id:
+        try:
+            col_card = Card.query.get(int(printing_id))
+        except (TypeError, ValueError):
+            col_card = None
+        if col_card is not None and not name:
+            name = col_card.name
+        if col_card is not None and name and col_card.name != name:
+            # Client sent a stale/mismatched name; trust the printing row
+            name = col_card.name
+
     if not name:
         return jsonify({'error': 'Card name required'}), 400
+
+    if col_card is None:
+        # Collection-only: the card must be owned (name match as fallback)
+        col_card = Card.query.filter_by(name=name).first()
+        if col_card is None:
+            return jsonify({'error': f'"{name}" is not in your collection. The deck builder only allows cards from your collection.'}), 400
 
     qty = max(1, int(data.get('quantity', 1)))
     is_cmd = bool(data.get('is_commander', False))
     is_sb = bool(data.get('is_sideboard', False))
+
+    # Commander colour-identity restriction (non-commander cards only).
+    # Partners/commanders themselves define the identity, so they are exempt.
+    if _is_commander_deck(deck) and not is_cmd:
+        commander_identity = _get_commander_identity(deck)
+        if commander_identity is not None:
+            # Prefer the selected printing's identity, else name-level identity
+            if col_card is not None and col_card.color_identity is not None:
+                card_identity = _parse_color_identity(col_card.color_identity)
+            elif data.get('color_identity'):
+                card_identity = _parse_color_identity(data.get('color_identity'))
+            elif col_card is not None:
+                card_identity = _parse_color_identity(col_card.color_identity)
+            else:
+                card_identity = set()
+            if not _color_identity_legal(card_identity, commander_identity):
+                allowed = ', '.join(sorted(commander_identity)) or 'colourless'
+                card_id_str = ', '.join(sorted(card_identity)) or 'colourless'
+                return jsonify({
+                    'error': f'"{name}" ({card_id_str}) is not legal in this deck — commander colour identity is {allowed}.',
+                    'code': 'color_identity',
+                    'card_color_identity': sorted(card_identity),
+                    'commander_color_identity': sorted(commander_identity),
+                }), 400
+
+    colors_value = data.get('colors')
+    if colors_value is None and col_card is not None:
+        colors_value = col_card.colors
+    elif isinstance(colors_value, (list, tuple)):
+        colors_value = ','.join(colors_value)
+    ci_value = data.get('color_identity')
+    if ci_value is None and col_card is not None:
+        ci_value = col_card.color_identity
+    elif isinstance(ci_value, (list, tuple)):
+        ci_value = ','.join(ci_value)
 
     # Check if card already exists in this deck under the same slot
     existing = DeckCard.query.filter_by(
@@ -436,11 +594,29 @@ def api_deck_card_add(deck_id):
 
     if existing:
         existing.quantity += qty
+        # Update to the selected printing if one was pinned
+        if data.get('scryfall_id'):
+            existing.scryfall_id = data.get('scryfall_id')
+        elif col_card is not None and col_card.scryfall_id:
+            existing.scryfall_id = col_card.scryfall_id
+        if data.get('set_code'):
+            existing.set_code = data.get('set_code')
+        elif col_card is not None and col_card.set_code:
+            existing.set_code = col_card.set_code
+        if data.get('image_uri'):
+            existing.image_uri = data.get('image_uri')
+        elif col_card is not None and col_card.image_uri:
+            existing.image_uri = col_card.image_uri
+        if colors_value is not None:
+            existing.colors = colors_value
+        if ci_value is not None:
+            try:
+                existing.color_identity = ci_value
+            except Exception:
+                pass
         db.session.commit()
         return jsonify(existing.to_dict())
 
-    # Look up metadata from collection if not passed
-    col_card = Card.query.filter_by(name=name).first()
     dc = DeckCard(
         deck_id=deck_id,
         name=name,
@@ -452,7 +628,8 @@ def api_deck_card_add(deck_id):
         image_uri=data.get('image_uri') or (col_card.image_uri if col_card else None),
         type_line=data.get('type_line') or (col_card.type_line if col_card else None),
         mana_cost=data.get('mana_cost') or (col_card.mana_cost if col_card else None),
-        colors=data.get('colors') or (col_card.colors if col_card else None),
+        colors=colors_value,
+        color_identity=ci_value,
     )
     db.session.add(dc)
     db.session.commit()
@@ -472,6 +649,37 @@ def api_deck_card_edit(deck_id, card_id):
             db.session.commit()
             return jsonify({'deleted': True})
         dc.quantity = q
+
+    # Commander legality: demoting a commander or moving to sideboard/mainboard
+    # must still be legal under any remaining commander.
+    wants_non_commander = (
+        data.get('is_sideboard') is True
+        or (('is_commander' in data) and not data.get('is_commander') and dc.is_commander)
+    )
+    if wants_non_commander:
+        deck = Deck.query.get_or_404(deck_id)
+        if _is_commander_deck(deck):
+            # Identity excluding the card being demoted
+            other_cmds = DeckCard.query.filter(
+                DeckCard.deck_id == deck_id,
+                DeckCard.is_commander == True,
+                DeckCard.id != card_id,
+            ).all()
+            if other_cmds:
+                remaining_identity = set()
+                for other in other_cmds:
+                    stored = (getattr(other, 'color_identity', None) or '').strip()
+                    if stored:
+                        remaining_identity.update(_parse_color_identity(stored))
+                    else:
+                        col = Card.query.filter_by(name=other.name).first()
+                        remaining_identity.update(_parse_color_identity(col.color_identity) if col and col.color_identity else _parse_color_identity(other.colors))
+                dc_identity = _parse_color_identity(getattr(dc, 'color_identity', None)) if (getattr(dc, 'color_identity', None) or '').strip() else _parse_color_identity(dc.colors)
+                if not dc_identity:
+                    col = Card.query.filter_by(name=dc.name).first()
+                    dc_identity = _parse_color_identity(col.color_identity) if col else set()
+                if not _color_identity_legal(dc_identity, remaining_identity):
+                    return jsonify({'error': f'"{dc.name}" is not legal without this commander — remaining commander colour identity is {", ".join(sorted(remaining_identity)) or "colourless"}.', 'code': 'color_identity'}), 400
 
     if 'is_commander' in data:
         dc.is_commander = bool(data['is_commander'])
@@ -498,46 +706,105 @@ def api_deck_card_delete(deck_id, card_id):
 
 @main.route('/api/collection/search')
 def api_collection_search():
-    """Search cards currently in the user's collection for adding to decks."""
+    """Search cards currently in the user's collection for adding to decks.
+
+    Returns one entry per distinct name with a ``printings`` array so the
+    deck builder can offer a per-printing preview picker. When ``deck_id`` is
+    supplied and that deck is a Commander deck with a commander already set,
+    only commander-legal cards (colour identity ⊆ commander identity) are
+    returned. Pass ``all=1`` to skip that filter when browsing.
+    """
     q = request.args.get('q', '').strip()
-    if not q:
+    deck_id = request.args.get('deck_id', '').strip()
+    show_all = request.args.get('all', '').strip().lower() in ('1', 'true', 'yes')
+    target_deck = None
+    if deck_id and deck_id.isdigit():
+        target_deck = Deck.query.get(int(deck_id))
+    else:
+        deck_id = ''
+
+    # Browsing mode: empty query with a deck context shows the whole
+    # (filtered) collection; without a deck context empty means no query.
+    if not q and not deck_id:
         return jsonify([])
 
-    like = f'%{q}%'
+    like = f'%{q}%' if q else '%%'
+    query = Card.query
+    if q:
+        query = query.filter(or_(Card.name.ilike(like), Card.type_line.ilike(like)))
     cards = (
-        Card.query
-        .filter(or_(Card.name.ilike(like), Card.type_line.ilike(like)))
+        query
         .order_by(Card.name)
-        .limit(60)
+        .limit(200)
         .all()
     )
 
-    # Group by name and sum owned quantities across all printings
-    names = list({c.name for c in cards})
+    commander_identity = None
+    if target_deck is not None and not show_all and _is_commander_deck(target_deck):
+        commander_identity = _get_commander_identity(target_deck)
+
+    # Group by name, preserving every owned printing row
+    grouped = {}
+    order = []
+    for c in cards:
+        if c.name not in grouped:
+            grouped[c.name] = []
+            order.append(c.name)
+        grouped[c.name].append(c)
+
+    # Sum owned quantities across ALL printings of matched names
+    # (not just the first 200 rows from the name search)
     totals = {}
-    if names:
+    if grouped:
         rows = (
             db.session.query(Card.name, db.func.sum(Card.quantity))
-            .filter(Card.name.in_(names))
+            .filter(Card.name.in_(list(grouped.keys())))
             .group_by(Card.name)
             .all()
         )
         totals = {name: total or 0 for name, total in rows}
 
-    results = {}
-    for c in cards:
-        if c.name not in results:
-            results[c.name] = {
-                'name': c.name,
+    results = []
+    for name in order:
+        copies = grouped[name]
+        # Representative copy prefers foil with art, else any with art
+        primary = next((c for c in copies if c.foil and c.image_uri), None) or next((c for c in copies if c.image_uri), copies[0])
+        identity_set = _parse_color_identity(primary.color_identity) if primary.color_identity else set()
+        if commander_identity is not None and not _color_identity_legal(identity_set, commander_identity):
+            continue
+        printings = []
+        for c in copies:
+            printings.append({
+                'id': c.id,
                 'scryfall_id': c.scryfall_id,
-                'image_uri': c.image_uri,
-                'mana_cost': c.mana_cost,
-                'type_line': c.type_line,
                 'set_code': c.set_code,
-                'total_owned': totals.get(c.name, c.quantity),
-            }
+                'set_name': c.set_name,
+                'collector_number': c.collector_number,
+                'foil': bool(c.foil),
+                'quantity': c.quantity or 0,
+                'storage_location': c.storage_location or '',
+                'image_uri': c.image_uri,
+                'colors': c.colors.split(',') if c.colors else [],
+                'color_identity': c.color_identity.split(',') if c.color_identity else [],
+            })
+        results.append({
+            'name': primary.name,
+            'scryfall_id': primary.scryfall_id,
+            'image_uri': primary.image_uri,
+            'mana_cost': primary.mana_cost,
+            'type_line': primary.type_line,
+            'set_code': primary.set_code,
+            'colors': primary.colors.split(',') if primary.colors else [],
+            'color_identity': primary.color_identity.split(',') if primary.color_identity else [],
+            'foil': any(bool(c.foil) for c in copies),
+            'total_owned': totals.get(primary.name, sum(c.quantity or 0 for c in copies)),
+            'printings_count': len(printings),
+            'printings': printings,
+        })
+        if len(results) >= 60:
+            break
 
-    return jsonify(list(results.values()))
+    return jsonify(results)
 
 
 # ── Stats API ─────────────────────────────────────────────────────────────────
@@ -546,6 +813,7 @@ def api_collection_search():
 def api_stats():
     """Quick stats and total collection valuation for the navbar."""
     from . import pricing
+    _ensure_db()
     cad_rate = pricing.get_usd_to_cad_rate()
 
     total_cards = db.session.query(db.func.sum(Card.quantity)).scalar() or 0
@@ -664,11 +932,22 @@ def api_sorting_sync_data():
     """
     decks = Deck.query.order_by(Deck.name).all()
     deck_list = []
-    
-    # Palette of distinctive colors for SORTING sleeve marking
+
+    # Palette of 48 distinctive colours for SORTING sleeve marking
+    # (PRISM-compatible: one colour + one slot per deck, up to 48 decks).
+    # Tuned to the Betem 48 Colors Dual Tip set on Amazon.ca (B0BR3XX6NC,
+    # $29.99, In Stock) — no single Uni Posca 48/52 set exists there
+    # (largest single Posca sets are PC-5M 29 / PC-3M 24). Metallics avoided.
+    # Order interleaves hue families so sequentially-synced decks differ.
     default_colors = [
-        '#EEB41B', '#E54D2E', '#3E63DD', '#46A758', '#AB4ABA',
-        '#00A2C7', '#F76B15', '#9E5CF2', '#FFDC00', '#2B9A66'
+        '#F44336', '#2196F3', '#4CAF50', '#FFEB3B', '#9C27B0', '#FF9800',
+        '#E91E63', '#00BCD4', '#673AB7', '#03A9F4', '#009688', '#8BC34A',
+        '#3F51B5', '#CDDC39', '#FFC107', '#000000', '#FFFFFF', '#9E9E9E',
+        '#D32F2F', '#1976D2', '#388E3C', '#FBC02D', '#7B1FA2', '#F57C00',
+        '#C2185B', '#0097A7', '#512DA8', '#0288D1', '#00796B', '#689F38',
+        '#303F9F', '#AFB42B', '#FFA000', '#E57373', '#64B5F6', '#81C784',
+        '#FFF176', '#BA68C8', '#FFB74D', '#F06292', '#4DD0E1', '#9575CD',
+        '#4FC3F7', '#4DB6AC', '#AED581', '#7986CB', '#DCE775', '#FFD54F',
     ]
 
     for idx, d in enumerate(decks):

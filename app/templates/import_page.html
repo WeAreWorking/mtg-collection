@@ -29,22 +29,9 @@
     </div>
 
     <div class="import-right">
-      <label class="form-label">Default Condition</label>
-      <select id="col-condition" class="filter-select full-width">
-        <option value="NM">Near Mint</option>
-        <option value="LP">Lightly Played</option>
-        <option value="MP">Moderately Played</option>
-        <option value="HP">Heavily Played</option>
-        <option value="DMG">Damaged</option>
-      </select>
-
-      <label class="form-label mt">Default Storage Location</label>
+      <label class="form-label">Default Storage Location</label>
       <input type="text" id="col-storage" class="filter-input full-width"
              placeholder="e.g. Binder A, Commander Box, SORTING Tray" />
-
-      <label class="form-label mt">Default Purchase Price (per card)</label>
-      <input type="number" id="col-price" class="filter-input full-width"
-             placeholder="e.g. 2.99" step="0.01" min="0" />
 
       <button id="btn-import-collection" class="btn btn-primary full-width mt-lg">
         Import to Collection
@@ -75,8 +62,7 @@
 
       <label class="form-label mt">Format</label>
       <select id="deck-format" class="filter-select full-width">
-        <option value="">— Select format —</option>
-        <option value="Commander">Commander / EDH</option>
+        <option value="Commander" selected>Commander / EDH</option>
         <option value="Standard">Standard</option>
         <option value="Modern">Modern</option>
         <option value="Pioneer">Pioneer</option>

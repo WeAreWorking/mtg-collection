@@ -8,18 +8,68 @@ const SORTING_STORAGE_KEY = 'sorting_decks_data_v1';
 const SORTING_MARKED_KEY = 'sorting_marked_cards_v1';
 const SORTING_NAME_KEY = 'sorting_active_name_v1';
 
-// Official SORTING Palette
+// Official SORTING Palette — 48 colours (PRISM-compatible, up to 48 decks)
+// PRISM ("One Card. Every Deck.") holds 48 colour slots / decks per sleeve
+// (96 with dot splits). No single Uni Posca 48/52 set exists on Amazon.ca
+// (largest single Posca sets are PC-5M 29 / PC-3M 24), so this palette is
+// tuned to a single purchasable 48-colour set instead:
+// Betem 48 Colors Dual Tip Acrylic Paint Markers (Amazon.ca ASIN B0BR3XX6NC,
+// $29.99, In Stock, 20.9k reviews, 1mm fine + 1-5mm round cotton nibs —
+// fine tip suits thin sleeve stripes; Artecho 48 B0D8NGYP76 is the
+// same-format alternative). Colours are the generic vivid + pastel/shade
+// + black/white/grey range that set provides (metallics avoided, as in
+// PRISM guidance, since they rub off inner sleeves).
+// Order interleaves hue families so sequentially-owned decks get
+// maximally distinct colours.
 const SORTING_PALETTE = [
-  '#EEB41B', // Yellow
-  '#E54D2E', // Orange-Red
-  '#3E63DD', // Blue
-  '#46A758', // Green
-  '#AB4ABA', // Magenta
-  '#00A2C7', // Cyan
-  '#F76B15', // Amber
-  '#9E5CF2', // Purple
-  '#FFDC00', // Gold
-  '#2B9A66', // Emerald
+  '#F44336', // Red
+  '#2196F3', // Blue
+  '#4CAF50', // Green
+  '#FFEB3B', // Yellow
+  '#9C27B0', // Purple
+  '#FF9800', // Orange
+  '#E91E63', // Pink
+  '#00BCD4', // Cyan
+  '#673AB7', // Deep Purple
+  '#03A9F4', // Light Blue
+  '#009688', // Teal
+  '#8BC34A', // Light Green
+  '#3F51B5', // Indigo
+  '#CDDC39', // Lime
+  '#FFC107', // Amber
+  '#000000', // Black
+  '#FFFFFF', // White
+  '#9E9E9E', // Grey
+  '#D32F2F', // Dark Red
+  '#1976D2', // Dark Blue
+  '#388E3C', // Dark Green
+  '#FBC02D', // Dark Yellow (golden-yellow)
+  '#7B1FA2', // Dark Purple
+  '#F57C00', // Dark Orange
+  '#C2185B', // Dark Pink
+  '#0097A7', // Dark Cyan
+  '#512DA8', // Dark Deep Purple
+  '#0288D1', // Dark Light Blue
+  '#00796B', // Dark Teal
+  '#689F38', // Dark Light Green
+  '#303F9F', // Dark Indigo
+  '#AFB42B', // Dark Lime
+  '#FFA000', // Dark Amber
+  '#E57373', // Light Red
+  '#64B5F6', // Light Blue 300
+  '#81C784', // Light Green 300
+  '#FFF176', // Light Yellow
+  '#BA68C8', // Light Purple
+  '#FFB74D', // Light Orange
+  '#F06292', // Light Pink
+  '#4DD0E1', // Light Cyan
+  '#9575CD', // Light Deep Purple
+  '#4FC3F7', // Light Sky Blue
+  '#4DB6AC', // Light Teal
+  '#AED581', // Light Lime Green
+  '#7986CB', // Light Indigo
+  '#DCE775', // Light Lime
+  '#FFD54F', // Light Amber
 ];
 
 let sortingState = {
@@ -177,14 +227,20 @@ function switchTab(tabName) {
 }
 
 // ── Color Swatches ────────────────────────────────────────────────────────────
+function sortingPaletteColor(deckIndex) {
+  return SORTING_PALETTE[deckIndex % SORTING_PALETTE.length];
+}
+
 function renderColorSwatches() {
   const container = document.getElementById('sorting-swatches-container');
   if (!container) return;
+  // Show slot numbers (PRISM: 1–48) so auto-assigned stripes can be found fast.
   container.innerHTML = SORTING_PALETTE.map((color, idx) => `
     <div class="sorting-color-swatch ${idx === 0 ? 'active' : ''}"
          style="background: ${color};"
          data-color="${color}"
-         title="${color}"></div>
+         data-index="${idx}"
+         title="Slot ${idx + 1} · ${color}"><span>${idx + 1}</span></div>
   `).join('');
 
   container.querySelectorAll('.sorting-color-swatch').forEach((swatch) => {
@@ -287,12 +343,16 @@ function handleAddDeck(e) {
 
   const name = nameInput.value.trim();
   const commander = commanderInput?.value.trim() || '';
-  const color = colorInput?.value || SORTING_PALETTE[sortingState.decks.length % SORTING_PALETTE.length];
+  const color = colorInput?.value || sortingPaletteColor(sortingState.decks.length);
   const rawList = listInput.value.trim();
 
   if (!name || !rawList) {
     alert('Please provide a deck name and a list of cards.');
     return;
+  }
+
+  if (sortingState.decks.length + 1 > SORTING_PALETTE.length) {
+    alert(`SORTING holds up to ${SORTING_PALETTE.length} distinct stripe colours (PRISM physical limit, 48 / 96 with dot splits). Deck ${(sortingState.decks.length + 1)} will reuse colour ${sortingPaletteColor(sortingState.decks.length)} — consider dot-split marking or a second sleeve set.`);
   }
 
   const parsedCards = parseRawDecklist(rawList);
@@ -415,7 +475,11 @@ function updateHeaderDeckCount() {
   const tag = document.getElementById('sorting-deck-count-badge');
   if (tag) {
     const count = sortingState.decks.length;
-    tag.textContent = `${count} deck${count !== 1 ? 's' : ''}`;
+    const limit = SORTING_PALETTE.length;
+    tag.textContent = `${count} / ${limit} deck${count !== 1 ? 's' : ''}`;
+    tag.title = count > limit
+      ? `SORTING holds ${limit} distinct stripe colours (PRISM physical limit: 48, 96 with dot splits). Colours repeat beyond ${limit}.`
+      : `${count} deck${count !== 1 ? 's' : ''} of ${limit} stripe colours`;
   }
 }
 
@@ -441,13 +505,13 @@ function renderDecksList() {
         <div class="sorting-deck-card" style="--deck-color: ${deck.color};">
           <div class="sorting-deck-card-header">
             <span class="sorting-deck-name">${escapeHtml(deck.name)}</span>
-            <span style="display:inline-block; width:14px; height:14px; border-radius:50%; background:${deck.color}; box-shadow:0 0 6px ${deck.color};"></span>
+            <span style="display:inline-block; width:14px; height:14px; border-radius:50%; background:${deck.color}; box-shadow:0 0 6px ${deck.color}; border: 1px solid rgba(0,0,0,0.4);"></span>
           </div>
           <div class="sorting-deck-commander">
             <span>👑 ${escapeHtml(deck.commander || 'No commander listed')}</span>
           </div>
           <div class="sorting-deck-meta">
-            <span>Slot: Side A · Slot ${idx + 1}</span>
+            <span>Slot: ${idx + 1 > SORTING_PALETTE.length ? `Dot-split · Slot ${(idx % SORTING_PALETTE.length) + 1}b` : `Slot ${idx + 1} / ${SORTING_PALETTE.length}`}</span>
             <span>•</span>
             <span>${deck.cards ? deck.cards.length : 0} cards</span>
           </div>
@@ -457,6 +521,7 @@ function renderDecksList() {
         </div>
       `).join('')}
     </div>
+    ${sortingState.decks.length > SORTING_PALETTE.length ? `<p class="form-hint" style="margin-top:0.5rem;">⚠️ ${sortingState.decks.length - SORTING_PALETTE.length} deck(s) beyond ${SORTING_PALETTE.length} colours reuse a stripe — PRISM uses dot splits (half-marks) to reach 96 on the same sleeve. Keep this list to ${SORTING_PALETTE.length} or mark the extras as dot splits.</p>` : ''}
   `;
 }
 
@@ -511,10 +576,12 @@ function renderResults() {
     const key = card.name.toLowerCase();
     const isDone = !!sortingState.marked[key];
 
-    // Build sleeve preview
-    const sleeveSlotsHtml = sortingState.decks.map((deck) => {
+    // Build sleeve preview (adaptive: slots shrink as deck count grows to 48)
+    const deckCount = sortingState.decks.length;
+    const slotW = deckCount > 36 ? 5 : deckCount > 24 ? 7 : deckCount > 12 ? 9 : 12;
+    const sleeveSlotsHtml = sortingState.decks.map((deck, deckIdx) => {
       const active = card.decks.some((d) => d.id === deck.id);
-      return `<div class="sleeve-slot ${active ? 'active' : ''}" style="${active ? `background:${deck.color}; box-shadow: 0 0 6px ${deck.color};` : ''}" title="${deck.name}"></div>`;
+      return `<div class="sleeve-slot ${active ? 'active' : ''}" style="width:${slotW}px;${active ? `background:${deck.color}; box-shadow: 0 0 6px ${deck.color};` : ''}" title="Slot ${deckIdx + 1} · ${escapeHtml(deck.name)}${active ? ' · ' + deck.color : ''}"></div>`;
     }).join('');
 
     const deckBadges = card.decks.map((d) => `
@@ -692,12 +759,14 @@ function renderScryCard() {
   if (progressEl) progressEl.textContent = `Card ${sortingState.scryIndex + 1} of ${sortingState.scryCards.length}`;
 
   if (stripesEl) {
-    stripesEl.innerHTML = sortingState.decks.map((deck) => {
+    const deckCount = sortingState.decks.length;
+    const stripeW = deckCount > 36 ? 10 : deckCount > 24 ? 14 : deckCount > 12 ? 18 : 22;
+    stripesEl.innerHTML = sortingState.decks.map((deck, deckIdx) => {
       const active = card.decks.some((d) => d.id === deck.id);
       return `
-        <div style="display:flex; flex-direction:column; align-items:center; gap: 0.5rem;">
-          <div style="width: 22px; height: 50px; border-radius: 4px; background: ${active ? deck.color : 'rgba(255,255,255,0.06)'}; box-shadow: ${active ? `0 0 12px ${deck.color}` : 'none'};"></div>
-          <span style="font-size: 0.75rem; color: ${active ? '#fff' : 'var(--text-dim)'};">${escapeHtml(deck.name)}</span>
+        <div class="scry-stripe-item" style="display:flex; flex-direction:column; align-items:center; gap: 0.5rem;">
+          <div style="width: ${stripeW}px; height: 50px; border-radius: 4px; background: ${active ? deck.color : 'rgba(255,255,255,0.06)'}; box-shadow: ${active ? `0 0 12px ${deck.color}` : 'none'};"></div>
+          <span class="scry-stripe-label" style="font-size: 0.75rem; color: ${active ? '#fff' : 'var(--text-dim)'};">${deckIdx + 1} · ${escapeHtml(deck.name)}</span>
         </div>
       `;
     }).join('');
