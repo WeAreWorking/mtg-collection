@@ -67,7 +67,7 @@ To make that work seamlessly in real life, you need an application that:
 
 - **Local SORTING tool:** Complete offline-friendly sleeve-marking tool for local use (no external build site required).
 - **1-Click Local Database Sync:** Import all decks directly from your collection database (`GET /api/sorting/sync-data`) without having to re-paste decklists. State is stored in `localStorage`.
-- **Visual Sleeve Stripes:** Renders the physical sleeve edge with designated color markers for each deck in the modular pool. **48 stripe colours** (PRISM-compatible: one colour + one slot per deck, up to 48 decks on one sleeve; 96 with dot splits) modelled on the single purchasable [Betem 48 Colors Dual Tip set on Amazon.ca (B0BR3XX6NC, $29.99)](https://www.amazon.ca/dp/B0BR3XX6NC) — no single Uni Posca 48-set exists there (largest are 29/24 colours) — with slot-numbered swatches and adaptive sleeve previews (slots shrink as the pool grows).
+- **Visual Sleeve Stripes:** Renders the physical sleeve edge with designated color markers for each deck in the modular pool. **48 stripe colours** (one colour + one slot per deck, up to 48 decks on one sleeve; 96 with half-marks) with slot-numbered swatches and adaptive sleeve previews (slots shrink as the pool grows). See README for the recommended matching marker set.
 - **Interactive Overlap Matrix:** Visual pairwise matrix displaying shared card counts across all decks.
 - **SCRY-Mode:** Fullscreen card-by-card marking walkthrough with "Done" and "Skip" triggers.
 - **Printable Guide & CSV Export:** Generate print-ready guides for deckboxes and CSV backups, plus full JSON backup/restore.

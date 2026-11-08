@@ -934,10 +934,7 @@ def api_sorting_sync_data():
     deck_list = []
 
     # Palette of 48 distinctive colours for SORTING sleeve marking
-    # (PRISM-compatible: one colour + one slot per deck, up to 48 decks).
-    # Tuned to the Betem 48 Colors Dual Tip set on Amazon.ca (B0BR3XX6NC,
-    # $29.99, In Stock) — no single Uni Posca 48/52 set exists there
-    # (largest single Posca sets are PC-5M 29 / PC-3M 24). Metallics avoided.
+    # (one colour + one slot per deck, up to 48 decks per sleeve).
     # Order interleaves hue families so sequentially-synced decks differ.
     default_colors = [
         '#F44336', '#2196F3', '#4CAF50', '#FFEB3B', '#9C27B0', '#FF9800',

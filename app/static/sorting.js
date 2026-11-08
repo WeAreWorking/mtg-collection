@@ -8,19 +8,9 @@ const SORTING_STORAGE_KEY = 'sorting_decks_data_v1';
 const SORTING_MARKED_KEY = 'sorting_marked_cards_v1';
 const SORTING_NAME_KEY = 'sorting_active_name_v1';
 
-// Official SORTING Palette — 48 colours (PRISM-compatible, up to 48 decks)
-// PRISM ("One Card. Every Deck.") holds 48 colour slots / decks per sleeve
-// (96 with dot splits). No single Uni Posca 48/52 set exists on Amazon.ca
-// (largest single Posca sets are PC-5M 29 / PC-3M 24), so this palette is
-// tuned to a single purchasable 48-colour set instead:
-// Betem 48 Colors Dual Tip Acrylic Paint Markers (Amazon.ca ASIN B0BR3XX6NC,
-// $29.99, In Stock, 20.9k reviews, 1mm fine + 1-5mm round cotton nibs —
-// fine tip suits thin sleeve stripes; Artecho 48 B0D8NGYP76 is the
-// same-format alternative). Colours are the generic vivid + pastel/shade
-// + black/white/grey range that set provides (metallics avoided, as in
-// PRISM guidance, since they rub off inner sleeves).
-// Order interleaves hue families so sequentially-owned decks get
-// maximally distinct colours.
+// Official SORTING Palette — 48 colours (up to 48 decks per sleeve,
+// 96 with half-marks). Order interleaves hue families so
+// sequentially-owned decks get maximally distinct colours.
 const SORTING_PALETTE = [
   '#F44336', // Red
   '#2196F3', // Blue
@@ -234,7 +224,7 @@ function sortingPaletteColor(deckIndex) {
 function renderColorSwatches() {
   const container = document.getElementById('sorting-swatches-container');
   if (!container) return;
-  // Show slot numbers (PRISM: 1–48) so auto-assigned stripes can be found fast.
+  // Show slot numbers (1–48) so auto-assigned stripes can be found fast.
   container.innerHTML = SORTING_PALETTE.map((color, idx) => `
     <div class="sorting-color-swatch ${idx === 0 ? 'active' : ''}"
          style="background: ${color};"
@@ -352,7 +342,7 @@ function handleAddDeck(e) {
   }
 
   if (sortingState.decks.length + 1 > SORTING_PALETTE.length) {
-    alert(`SORTING holds up to ${SORTING_PALETTE.length} distinct stripe colours (PRISM physical limit, 48 / 96 with dot splits). Deck ${(sortingState.decks.length + 1)} will reuse colour ${sortingPaletteColor(sortingState.decks.length)} — consider dot-split marking or a second sleeve set.`);
+    alert(`SORTING holds up to ${SORTING_PALETTE.length} distinct stripe colours. Deck ${(sortingState.decks.length + 1)} will reuse colour ${sortingPaletteColor(sortingState.decks.length)} — consider half-mark (dot-split) marking or a second sleeve set.`);
   }
 
   const parsedCards = parseRawDecklist(rawList);
@@ -478,7 +468,7 @@ function updateHeaderDeckCount() {
     const limit = SORTING_PALETTE.length;
     tag.textContent = `${count} / ${limit} deck${count !== 1 ? 's' : ''}`;
     tag.title = count > limit
-      ? `SORTING holds ${limit} distinct stripe colours (PRISM physical limit: 48, 96 with dot splits). Colours repeat beyond ${limit}.`
+      ? `SORTING holds ${limit} distinct stripe colours. Colours repeat beyond ${limit}.`
       : `${count} deck${count !== 1 ? 's' : ''} of ${limit} stripe colours`;
   }
 }
@@ -521,7 +511,7 @@ function renderDecksList() {
         </div>
       `).join('')}
     </div>
-    ${sortingState.decks.length > SORTING_PALETTE.length ? `<p class="form-hint" style="margin-top:0.5rem;">⚠️ ${sortingState.decks.length - SORTING_PALETTE.length} deck(s) beyond ${SORTING_PALETTE.length} colours reuse a stripe — PRISM uses dot splits (half-marks) to reach 96 on the same sleeve. Keep this list to ${SORTING_PALETTE.length} or mark the extras as dot splits.</p>` : ''}
+    ${sortingState.decks.length > SORTING_PALETTE.length ? `<p class="form-hint" style="margin-top:0.5rem;">⚠️ ${sortingState.decks.length - SORTING_PALETTE.length} deck(s) beyond ${SORTING_PALETTE.length} colours reuse a stripe. Keep this list to ${SORTING_PALETTE.length} or mark the extras as half-marks (dot splits).</p>` : ''}
   `;
 }
 
