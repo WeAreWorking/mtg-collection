@@ -3,6 +3,7 @@ __pycache__/
 *.pyo
 *.pyd
 .env
+docker-compose.override.yml
 data/*.db
 data/*.db-journal
 data/*.db-wal

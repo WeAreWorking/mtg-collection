@@ -8,10 +8,12 @@ services:
     ports:
       - "7432:7432"
     volumes:
-      # TrueNAS / Dockge: map a dataset to /app/data inside the container.
-      # Change the left side to your actual dataset path, e.g. /mnt/pool/mtg-data
-      # The app creates collection.db inside this directory on first start (starts empty).
-      - /mnt/your-pool/mtg-data:/app/data
+      # TrueNAS / Dockge: set MTG_DATA_PATH in .env to your dataset path,
+      # e.g. /mnt/SSDs/Databases/MTG-collection (mounted to /app/data).
+      # Locally defaults to ./data. The .env file is gitignored, so
+      # `git pull` on the NAS will never overwrite it or your database.
+      - ${MTG_DATA_PATH:-./data}:/app/data
     restart: unless-stopped
     environment:
-      - SECRET_KEY=change-me-to-something-random
+      # Set a long random value in .env - never commit the real value.
+      - SECRET_KEY=${SECRET_KEY:-change-me-to-something-random}
