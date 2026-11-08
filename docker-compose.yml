@@ -1,9 +1,9 @@
 services:
   mtg-collection:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: mtg-collection:latest
+    # Built by GitHub Actions and pushed to GHCR on every push to main.
+    # Dockge / NAS just pulls the image - no local build, no git clone needed.
+    image: ghcr.io/weareworking/mtg-collection:latest
+    pull_policy: always
     container_name: mtg-collection
     ports:
       - "7432:7432"
@@ -11,7 +11,7 @@ services:
       # TrueNAS / Dockge: set MTG_DATA_PATH in .env to your dataset path,
       # e.g. /mnt/SSDs/Databases/MTG-collection (mounted to /app/data).
       # Locally defaults to ./data. The .env file is gitignored, so
-      # `git pull` on the NAS will never overwrite it or your database.
+      # it will never be overwritten or committed.
       - ${MTG_DATA_PATH:-./data}:/app/data
     restart: unless-stopped
     environment:
