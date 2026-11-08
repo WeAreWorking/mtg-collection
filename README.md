@@ -42,62 +42,30 @@ Other highlights:
 
 > The app creates `data/collection.db` on first run. Back up that file to preserve your collection. Set `SECRET_KEY` in the environment for production use.
 
-### Running with Docker / TrueNAS (Dockge)
+### Running with Docker / TrueNAS (image pull)
 
-This repo ships a clean build: the local database has been wiped, so the app starts with an empty collection/decks on first launch and creates its own `collection.db` in the mounted data volume.
+The image is built by GitHub Actions on every push to `main` and pushed to `ghcr.io/weareworking/mtg-collection:latest` (also tagged by commit SHA). No local build and no git clone on the NAS is needed.
 
-**Dockge on TrueNAS SCALE (recommended):**
+**Prerequisites for both methods:** Create a dataset for app data first in TrueNAS: **Storage → Datasets → Add Dataset** (e.g. `SSDs → Databases → MTG-collection`) and note its full path (e.g. `/mnt/SSDs/Databases/MTG-collection`). The container creates `collection.db` inside it on first start. Back up that dataset to preserve your collection.
 
-1. **Create a dataset for app data** in TrueNAS: *Storage → Datasets → Add Dataset*, e.g. `tank` → `mtg-data` (or reuse an existing pool/dataset). Note the full path, e.g. `/mnt/tank/mtg-data`. The container will create `collection.db` inside it on first start.
+**1. TrueNAS SCALE with Dockge (easiest) - see [docs/install-dockge.md](docs/install-dockge.md)**
+- **Apps → Dockge → Stacks → Add Stack**, name `mtg-collection`, paste the repo `docker-compose.yml` (image-only, no `build:`).
+- In the Stack variables editor set:
+  - `MTG_DATA_PATH` = your dataset path from above
+  - `SECRET_KEY` = a long random string (never commit it)
+- Click **Deploy**. Dockge pulls the image. Future updates: push to GitHub → wait for Actions → click **Redeploy**.
 
-2. **Upload the project to the NAS** (SFTP/SCP or SMB share). Upload the whole project folder — at minimum `Dockerfile`, `docker-compose.yml`, `app/`, `requirements.txt`, `run.py` — to a dataset folder, e.g. `/mnt/tank/mtg-collection`. Do **not** upload a local `data/collection.db`; the container starts empty and writes its DB into the volume from step 1.
+**2. TrueNAS SCALE native Custom App (no Dockge) - see [docs/install-truenas-custom-app.md](docs/install-truenas-custom-app.md)**
+- **Apps → Custom App → Create**, name `mtg-collection`, paste the same compose.
+- In the form set `MTG_DATA_PATH` as a **Host Path/Dataset** picker and `SECRET_KEY` as a **Secret** env var.
+- Set Update Policy to pull latest. Future updates: **Apps → mtg-collection → Update**.
 
-3. **Point the compose file at your dataset.** In `docker-compose.yml` (uploaded copy on the NAS), change:
-   ```yaml
-   volumes:
-     - /mnt/your-pool/mtg-data:/app/data
-   ```
-   to your real path from step 1, e.g. `/mnt/tank/mtg-data:/app/data`, and change `SECRET_KEY` to a random value. The stack is:
-   ```yaml
-   services:
-     mtg-collection:
-       build:
-         context: .
-         dockerfile: Dockerfile
-       image: mtg-collection:latest
-       container_name: mtg-collection
-       ports:
-         - "7432:7432"
-       volumes:
-         - /mnt/tank/mtg-data:/app/data
-       restart: unless-stopped
-       environment:
-         - SECRET_KEY=change-me-to-something-random
-   ```
-   (`build:` + `image:` means Dockge builds `mtg-collection:latest` from `Dockerfile` on the NAS — no registry needed.)
-
-4. **Create the Dockge stack:**
-   - Open **Apps → Dockge** in TrueNAS SCALE.
-   - Go to **Stacks → Add Stack** (or *Create Stack*), name it `mtg-collection`.
-   - Paste the `docker-compose.yml` content from step 3 (or, if Dockge offers *Open Folder*, point it at the uploaded project folder). Confirm the volume path and `SECRET_KEY` are correct.
-   - Click **Deploy / Start**. Dockge runs `docker compose up --build` and builds the image from the uploaded source.
-
-   *CLI fallback (NAS shell):* `cd /mnt/tank/mtg-collection && docker compose up -d --build`, then verify with `docker compose logs -f` and `docker compose ps`.
-
-5. **Verify:** Wait for the container logs to show the app on `0.0.0.0:7432`, then open `http://<TrueNAS-IP>:7432/` — Collection, Decks, and Sorting should all be empty. Import decks/cards via the **Import** tab as needed.
-
-6. **Backups & updates:** Your data lives only in the dataset from step 1 (`collection.db`). Back up/restore that dataset — do not copy the file into the project folder. To update, re-upload code and rebuild (`docker compose up -d --build` or Dockge *Redeploy*); the mounted `data/` is untouched.
-
-> Port `7432` is the app port. If it is already in use on your NAS, change the left side (`"7432:7432"` → `"7433:7432"` etc.) consistently in the uploaded `docker-compose.yml` before deploying.
-
-### Running with plain Docker Compose (local dev)
-
-1. Build and start the container:
-   ```bash
-   docker compose up -d --build
-   ```
-
-2. The application will be accessible at port `7432`. Data is persisted to the directory configured in `docker-compose.yml` (`data/` locally, or your dataset path on the NAS).
+**Local Docker (dev):**
+```bash
+docker compose pull
+docker compose up -d
+```
+Port `7432` is the app port - change the host side (`"7433:7432"`) if it's already in use on your NAS.
 
 ---
 
