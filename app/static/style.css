@@ -91,12 +91,9 @@ code {
   height: 32px;
   border-radius: 8px;
   object-fit: contain;
-  border: 1px solid rgba(0, 240, 255, 0.4);
-  box-shadow: 0 0 10px rgba(0, 240, 255, 0.35);
-  filter: drop-shadow(0 0 6px rgba(0, 240, 255, 0.4));
   vertical-align: middle;
 }
-.nav-logo  { font-size: 1.5rem; filter: drop-shadow(0 0 8px var(--cyan)); }
+.nav-logo  { font-size: 1.5rem; }
 .nav-title {
   font-weight: 700;
   font-size: 1.2rem;
