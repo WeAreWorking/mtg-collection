@@ -96,10 +96,15 @@
   display: none !important;
 }
 
-/* ── Callout / Banner ────────────────────────────────────────────────────── */
+/* ── Subtitle (reminder) ──────────────────────────────────────────────────── */
+.sorting-subtitle {
+  margin: 0 0 1.25rem;
+}
+
+/* ── Callout / Banner (overlap matrix) ───────────────────────────────────── */
 .sorting-callout {
-  background: linear-gradient(135deg, rgba(40, 22, 69, 0.6), rgba(15, 23, 42, 0.8));
-  border: 1px solid rgba(171, 74, 186, 0.3);
+  background: var(--bg-card, #131726);
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
   border-radius: 10px;
   padding: 1.25rem;
   margin-bottom: 1.5rem;
@@ -458,4 +463,33 @@
   justify-content: space-between;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding-top: 1rem;
+}
+
+/* ── Import from Local Collection picker ─────────────────────────────────── */
+.sorting-import-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--bg-card, #131726);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
+}
+
+.sorting-import-item:hover {
+  background: var(--bg-elevated, #1a1e2e);
+}
+
+.sorting-import-item.is-existing {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.sorting-import-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,0.4);
 }

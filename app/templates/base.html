@@ -20,16 +20,16 @@
     </div>
     <div class="nav-links">
       <a href="/collection" class="nav-link {% if request.path == '/collection' %}active{% endif %}">
-        <span class="nav-icon">🪐</span> Collection
+        <svg class="icon" style="color:#05d9e8" aria-hidden="true"><use href="{{ url_for('static', filename='icons.svg') }}#icon-collection"/></svg> Collection
       </a>
       <a href="/decks" class="nav-link {% if request.path == '/decks' %}active{% endif %}">
-        <span class="nav-icon">🗂️</span> Decks
+        <svg class="icon" style="color:#ff2a85" aria-hidden="true"><use href="{{ url_for('static', filename='icons.svg') }}#icon-decks"/></svg> Decks
       </a>
       <a href="/sorting" class="nav-link {% if request.path in ['/sorting', '/build'] %}active{% endif %}">
-        <span class="nav-icon">🎨</span> SORTING Builder
+        <svg class="icon" style="color:#9d4edd" aria-hidden="true"><use href="{{ url_for('static', filename='icons.svg') }}#icon-sorting"/></svg> SORTING Builder
       </a>
       <a href="/import" class="nav-link {% if request.path == '/import' %}active{% endif %}">
-        <span class="nav-icon">⚡</span> Import
+        <svg class="icon" style="color:#ffe600" aria-hidden="true"><use href="{{ url_for('static', filename='icons.svg') }}#icon-import"/></svg> Import
       </a>
     </div>
     <div class="nav-stats" id="nav-stats">

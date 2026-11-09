@@ -485,10 +485,156 @@ async function populateDeckFilter() {
   } catch (e) { /* silent */ }
 }
 
+// ── Bulk remove ─────────────────────────────────────────────────────────────────
+// Map keyed by card name -> latest clumped card data (so previews survive pagination)
+let bulkSelected = new Map();
+let lastCollectionCards = [];
+
+function toggleBulkSelection(card, checked) {
+  if (checked) bulkSelected.set(card.name, card);
+  else bulkSelected.delete(card.name);
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  const barBtn = document.getElementById('btn-bulk-remove');
+  const clearBtn = document.getElementById('btn-bulk-clear');
+  const countEl = document.getElementById('bulk-remove-count');
+  const selected = [...bulkSelected.values()];
+  const totalCopies = selected.reduce((a, c) => a + (c.quantity || 0), 0);
+  const show = selected.length > 0;
+  if (barBtn) {
+    barBtn.classList.toggle('hidden', !show);
+    if (countEl) countEl.textContent = `${selected.length} name${selected.length !== 1 ? 's' : ''} · ${totalCopies} copies`;
+  }
+  if (clearBtn) clearBtn.classList.toggle('hidden', !show);
+  syncSelectAllCheckbox();
+}
+
+function syncSelectAllCheckbox() {
+  const selAll = document.getElementById('select-all-cards');
+  if (!selAll) return;
+  const boxes = [...document.querySelectorAll('.bulk-select')];
+  if (!boxes.length) { selAll.checked = false; selAll.indeterminate = false; return; }
+  const checked = boxes.filter(b => b.checked).length;
+  selAll.checked = checked === boxes.length && checked > 0;
+  selAll.indeterminate = checked > 0 && checked < boxes.length;
+}
+
+function clearBulkSelection() {
+  bulkSelected.clear();
+  document.querySelectorAll('.bulk-select').forEach(cb => { cb.checked = false; });
+  const selAll = document.getElementById('select-all-cards');
+  if (selAll) selAll.checked = false;
+  updateBulkBar();
+}
+
+function openBulkRemove() {
+  if (!bulkSelected.size) return;
+  const selected = [...bulkSelected.values()];
+  const list = document.getElementById('bulk-remove-list');
+  if (!list) return;
+  list.innerHTML = selected.map(card => {
+    const printings = card.printings && card.printings.length ? card.printings : [
+      { id: card.id, set_code: card.set_code, collector_number: card.collector_number, foil: card.foil, quantity: card.quantity, storage_location: card.storage_location, image_uri: card.image_uri }
+    ];
+    const total = printings.reduce((a, p) => a + (p.quantity || 0), 0) || card.quantity || 0;
+    const rows = printings.map(p => {
+      const owned = p.quantity || 0;
+      const img = p.image_uri || card.image_uri || '';
+      const label = `${p.set_code || '—'}${p.collector_number ? ' #' + p.collector_number : ''}${p.foil ? ' ✦Foil' : ''}${p.storage_location ? ' @ ' + p.storage_location : ''}`;
+      return `
+        <div class="bulk-printing-row" style="display:flex; align-items:center; gap:0.6rem; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:6px; padding:0.5rem;">
+          ${img ? `<img src="${img}" alt="${escHtml(card.name)}" loading="lazy" style="width:36px;height:50px;object-fit:cover;border-radius:3px;flex-shrink:0;" onerror="this.style.display='none'" />`
+                : `<span style="width:36px;height:50px;background:var(--bg-elevated);border-radius:3px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:0.6rem;">No img</span>`}
+          <span class="badge badge-set" style="flex-shrink:0;">${escHtml(label)}</span>
+          <span style="flex:1; font-size:0.8rem; color:var(--text-muted); font-family:var(--font-mono);">Owned ×${owned}</span>
+          <label style="display:flex; align-items:center; gap:0.35rem; font-size:0.78rem; color:var(--text-dim);">Remove
+            <input type="number" class="filter-input bulk-remove-qty" data-printing-id="${p.id}" value="${owned}" min="0" max="${owned}" style="width:64px; padding:0.25rem 0.4rem;" />
+          </label>
+        </div>`;
+    }).join('');
+    return `
+      <div class="bulk-card-group">
+        <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.4rem;">
+          <span style="font-weight:700; color:#fff;">${escHtml(card.name)}</span>
+          <span class="badge badge-qty">×${total} owned</span>
+          ${printings.length > 1 ? `<span class="badge badge-printings">${printings.length} printings</span>` : ''}
+        </div>
+        <div style="display:flex; flex-direction:column; gap:0.4rem;">${rows}</div>
+      </div>`;
+  }).join('');
+  updateBulkRemoveTotal();
+  list.querySelectorAll('.bulk-remove-qty').forEach(inp => inp.addEventListener('input', updateBulkRemoveTotal));
+  document.getElementById('bulk-remove-modal')?.classList.remove('hidden');
+}
+
+function updateBulkRemoveTotal() {
+  const inputs = document.querySelectorAll('.bulk-remove-qty');
+  let copies = 0, printings = 0;
+  inputs.forEach(inp => {
+    const v = Math.min(Math.max(parseInt(inp.value, 10) || 0, 0), parseInt(inp.max, 10) || 0);
+    copies += v;
+    if (v > 0) printings += 1;
+  });
+  const totalEl = document.getElementById('bulk-remove-total');
+  if (totalEl) totalEl.textContent = `Will remove ${copies} ${copies === 1 ? 'copy' : 'copies'} across ${printings} printing${printings !== 1 ? 's' : ''} (${bulkSelected.size} card name${bulkSelected.size !== 1 ? 's' : ''}).`;
+  const btn = document.getElementById('bulk-remove-confirm');
+  if (btn) btn.disabled = copies === 0;
+}
+
+function closeBulkRemove() {
+  document.getElementById('bulk-remove-modal')?.classList.add('hidden');
+}
+
+async function confirmBulkRemove() {
+  const inputs = [...document.querySelectorAll('.bulk-remove-qty')];
+  const items = [];
+  inputs.forEach(inp => {
+    const qty = parseInt(inp.value, 10) || 0;
+    const max = parseInt(inp.max, 10) || 0;
+    if (qty > 0) items.push({ printing_id: Number(inp.dataset.printingId), quantity: Math.min(qty, max || qty) });
+  });
+  if (!items.length) return;
+  const btn = document.getElementById('bulk-remove-confirm');
+  if (btn) { btn.disabled = true; btn.textContent = 'Removing…'; }
+  try {
+    const res = await apiFetch('/api/collection/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    });
+    closeBulkRemove();
+    clearBulkSelection();
+    currentPage = 1;
+    await loadCollection();
+    loadNavStats();
+    const deckNote = res.removed_from_decks ? ` Also removed from ${res.removed_from_decks} deck slot(s).` : '';
+    alert(`Removed ${res.removed_copies} ${res.removed_copies === 1 ? 'copy' : 'copies'} from ${res.removed_printings} printing(s).${deckNote}`);
+  } catch (e) {
+    alert('Could not remove cards: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Remove selected'; }
+  }
+}
+
 function initCollectionPage() {
   loadNavStats();
   populateDeckFilter();
   updateViewModeUI();
+
+  // Bulk remove wiring
+  document.getElementById('select-all-cards')?.addEventListener('change', (e) => {
+    document.querySelectorAll('.bulk-select').forEach(cb => {
+      cb.checked = e.target.checked;
+      cb.dispatchEvent(new Event('change'));
+    });
+  });
+  document.getElementById('btn-bulk-remove')?.addEventListener('click', openBulkRemove);
+  document.getElementById('btn-bulk-clear')?.addEventListener('click', clearBulkSelection);
+  document.getElementById('bulk-remove-close')?.addEventListener('click', closeBulkRemove);
+  document.getElementById('bulk-remove-cancel')?.addEventListener('click', closeBulkRemove);
+  document.getElementById('bulk-remove-modal')?.addEventListener('click', (e) => { if (e.target.id === 'bulk-remove-modal') closeBulkRemove(); });
+  document.getElementById('bulk-remove-confirm')?.addEventListener('click', confirmBulkRemove);
 
   // Set default per_page to 250 in table mode
   const perPageEl = document.getElementById('filter-per-page');
@@ -520,13 +666,32 @@ function initCollectionPage() {
   });
 
   // Instant filter changes
-  ['filter-deck','filter-color','filter-rarity','filter-foil','filter-sort','filter-per-page'].forEach(id => {
+  ['filter-deck','filter-color','filter-rarity','filter-foil','filter-sort','filter-order','filter-per-page'].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
       el.addEventListener('change', () => {
         currentPage = 1; loadCollection();
       });
     }
+  });
+
+  // Clickable column headers (high/low toggle, synced to dropdowns)
+  document.querySelectorAll('.sortable-th').forEach(th => {
+    th.addEventListener('click', () => {
+      const field = th.dataset.sort;
+      if (!field) return;
+      const sortEl = document.getElementById('filter-sort');
+      const orderEl = document.getElementById('filter-order');
+      if (!sortEl || !orderEl) return;
+      if (sortEl.value === field) {
+        orderEl.value = orderEl.value === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortEl.value = field;
+        orderEl.value = 'asc';
+      }
+      currentPage = 1;
+      loadCollection();
+    });
   });
 
   document.getElementById('btn-clear-filters').addEventListener('click', () => {
@@ -537,8 +702,24 @@ function initCollectionPage() {
     document.getElementById('filter-rarity').value = '';
     document.getElementById('filter-foil').value = '';
     document.getElementById('filter-sort').value = 'name';
+    const orderEl = document.getElementById('filter-order');
+    if (orderEl) orderEl.value = 'asc';
     currentPage = 1;
     loadCollection();
+  });
+}
+
+function updateSortIndicators(sortBy, sortOrder) {
+  document.querySelectorAll('.sortable-th').forEach(th => {
+    const ind = th.querySelector('.sort-indicator');
+    if (!ind) return;
+    if (th.dataset.sort === sortBy) {
+      ind.textContent = sortOrder === 'desc' ? ' ↓' : ' ↑';
+      th.classList.add('sort-active');
+    } else {
+      ind.textContent = '';
+      th.classList.remove('sort-active');
+    }
   });
 }
 
@@ -546,14 +727,16 @@ async function loadCollection() {
   const grid = document.getElementById('card-grid');
   const tableBody = document.getElementById('card-table-body');
   if (grid) grid.innerHTML = '<div class="loading-state">Scanning collection databanks…</div>';
-  if (tableBody) tableBody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:2.5rem;color:var(--cyan);font-family:var(--font-mono);">Scanning collection databanks…</td></tr>';
+  if (tableBody) tableBody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:2.5rem;color:var(--cyan);font-family:var(--font-mono);">Scanning collection databanks…</td></tr>';
 
   const perPageVal = parseInt(document.getElementById('filter-per-page')?.value || (viewMode === 'table' ? '250' : '60'), 10);
   const deckVal = document.getElementById('filter-deck')?.value || '';
-  const rawSort = document.getElementById('filter-sort').value;
-  
+  const rawSort = document.getElementById('filter-sort')?.value || 'name';
+  const rawOrder = document.getElementById('filter-order')?.value || 'asc';
+
+  // Backward compat: legacy combined values (price_desc / price_asc)
   let sortBy = 'name';
-  let sortOrder = 'asc';
+  let sortOrder = rawOrder === 'desc' ? 'desc' : 'asc';
   if (rawSort === 'price_desc') {
     sortBy = 'price';
     sortOrder = 'desc';
@@ -561,9 +744,10 @@ async function loadCollection() {
     sortBy = 'price';
     sortOrder = 'asc';
   } else {
-    sortBy = rawSort;
-    sortOrder = 'asc';
+    sortBy = rawSort || 'name';
+    sortOrder = rawOrder === 'desc' ? 'desc' : 'asc';
   }
+  updateSortIndicators(sortBy, sortOrder);
 
   const params = new URLSearchParams({
     q:        document.getElementById('search-q').value.trim(),
@@ -583,7 +767,7 @@ async function loadCollection() {
   } catch (e) {
     const errHtml = `<div class="empty-state"><span class="empty-icon">⚠️</span>Error: ${e.message}</div>`;
     if (grid) grid.innerHTML = errHtml;
-    if (tableBody) tableBody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:2rem;color:var(--pink);">Error: ${e.message}</td></tr>`;
+    if (tableBody) tableBody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:2rem;color:var(--pink);">Error: ${e.message}</td></tr>`;
   }
 }
 
@@ -594,6 +778,7 @@ function renderGrid(data) {
   const uniqueCount = (data.total_unique ?? data.total ?? 0).toLocaleString();
   const totalCount = (data.total_quantity ?? data.total ?? 0).toLocaleString();
   count.textContent = `${totalCount} cards (${uniqueCount} unique)`;
+  lastCollectionCards = data.cards || [];
 
   updateViewModeUI();
 
@@ -603,7 +788,7 @@ function renderGrid(data) {
       No cards found in databanks. Try adjusting your filters or <a href="/import">import some cards</a>.
     </div>`;
     if (grid) grid.innerHTML = emptyHtml;
-    if (tableBody) tableBody.innerHTML = `<tr class="table-empty-row"><td colspan="11" class="table-empty-cell"><div class="empty-state"><span class="empty-icon">🛸</span>No cards found in databanks. Try adjusting your filters or <a href="/import">import some cards</a>.</div></td></tr>`;
+    if (tableBody) tableBody.innerHTML = `<tr class="table-empty-row"><td colspan="12" class="table-empty-cell"><div class="empty-state"><span class="empty-icon">🛸</span>No cards found in databanks. Try adjusting your filters or <a href="/import">import some cards</a>.</div></td></tr>`;
     document.getElementById('pagination').classList.add('hidden');
     return;
   }
@@ -632,6 +817,7 @@ function renderGrid(data) {
 
       return `
         <tr data-id="${card.id}" title="Click to view full card rulings and market pricing breakdown">
+          <td class="text-center"><input type="checkbox" class="bulk-select" data-name="${escHtml(card.name)}" ${bulkSelected.has(card.name) ? 'checked' : ''} title="Select for bulk remove" style="transform:scale(1.2); accent-color:var(--accent);" /></td>
           <td class="text-center"><span class="badge badge-qty">×${card.quantity}</span></td>
           <td>
             <div class="table-card-name" title="${escHtml(card.name)}">
@@ -654,12 +840,22 @@ function renderGrid(data) {
     }).join('');
 
     tableBody.querySelectorAll('tr[data-id]').forEach(row => {
-      row.addEventListener('click', () => {
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('.bulk-select')) return;
         const id = row.dataset.id;
         const card = data.cards.find(c => c.id == id);
         if (card) openCardModal(card);
       });
     });
+    tableBody.querySelectorAll('.bulk-select').forEach(cb => {
+      cb.addEventListener('change', (e) => {
+        e.stopPropagation();
+        const card = data.cards.find(c => c.name === cb.dataset.name);
+        if (card) toggleBulkSelection(card, cb.checked);
+      });
+      cb.addEventListener('click', (e) => e.stopPropagation());
+    });
+    syncSelectAllCheckbox();
   }
 
   // ── Render Visual Card Grid Mode ───────────────────────────────────────────
@@ -670,6 +866,9 @@ function renderGrid(data) {
       const printingsCount = card.printings_count || 1;
       return `
         <div class="card-tile" data-id="${card.id}" title="${escHtml(card.name)}">
+          <div class="card-tile-select" style="position:absolute; top:6px; left:6px; z-index:2;">
+            <input type="checkbox" class="bulk-select" data-name="${escHtml(card.name)}" ${bulkSelected.has(card.name) ? 'checked' : ''} title="Select for bulk remove" onclick="event.stopPropagation()" style="transform:scale(1.3); accent-color:var(--accent); background:rgba(0,0,0,0.5);" />
+          </div>
           <img src="${card.image_uri || ''}"
                alt="${escHtml(card.name)}"
                loading="lazy"
@@ -700,12 +899,22 @@ function renderGrid(data) {
     }).join('');
 
     grid.querySelectorAll('.card-tile').forEach(tile => {
-      tile.addEventListener('click', () => {
+      tile.addEventListener('click', (e) => {
+        if (e.target.closest('.bulk-select')) return;
         const id = tile.dataset.id;
         const card = data.cards.find(c => c.id == id);
         if (card) openCardModal(card);
       });
     });
+    grid.querySelectorAll('.bulk-select').forEach(cb => {
+      cb.addEventListener('change', (e) => {
+        e.stopPropagation();
+        const card = data.cards.find(c => c.name === cb.dataset.name);
+        if (card) toggleBulkSelection(card, cb.checked);
+      });
+      cb.addEventListener('click', (e) => e.stopPropagation());
+    });
+    syncSelectAllCheckbox();
   }
 
   renderPagination(data);

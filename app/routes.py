@@ -125,8 +125,8 @@ def api_collection():
         rarity      — common | uncommon | rare | mythic
         foil        — true | false
         storage     — storage location substring
-        sort        — name | cmc | rarity | added_at (default: name)
-        order       — asc | desc (default: asc)
+        sort        — name | price | quantity | cmc | rarity | added_at (default: name; legacy price_desc/price_asc also accepted)
+        order       — asc | desc (default: asc; separate high/low dropdown)
         page        — page number (default: 1)
         per_page    — results per page (default: 60)
     """
@@ -140,6 +140,12 @@ def api_collection():
     storage = request.args.get('storage', '').strip()
     sort_by = request.args.get('sort', 'name')
     order = request.args.get('order', 'asc')
+    # Legacy combined values: sort=price_desc / price_asc
+    if sort_by == 'price_desc':
+        sort_by, order = 'price', 'desc'
+    elif sort_by == 'price_asc':
+        sort_by, order = 'price', 'asc'
+    order = 'desc' if str(order).lower() == 'desc' else 'asc'
     page = int(request.args.get('page', 1))
     per_page = min(int(request.args.get('per_page', 60)), 1000)
     in_deck = request.args.get('in_deck', '').strip()
@@ -265,6 +271,8 @@ def api_collection():
         clumped_cards.sort(key=lambda x: (x['name'] or '').lower(), reverse=reverse)
     elif sort_by in ('price', 'price_cad'):
         clumped_cards.sort(key=lambda x: (x['price_usd'] or 0.0), reverse=reverse)
+    elif sort_by == 'quantity':
+        clumped_cards.sort(key=lambda x: (x['quantity'] or 0), reverse=reverse)
     elif sort_by == 'cmc':
         clumped_cards.sort(key=lambda x: (x['cmc'] or 0.0), reverse=reverse)
     elif sort_by == 'rarity':
@@ -272,6 +280,8 @@ def api_collection():
         clumped_cards.sort(key=lambda x: rarity_ranks.get((x['rarity'] or '').lower(), 0), reverse=reverse)
     elif sort_by == 'added_at':
         clumped_cards.sort(key=lambda x: x.get('added_at') or '', reverse=reverse)
+    else:
+        clumped_cards.sort(key=lambda x: (x['name'] or '').lower(), reverse=reverse)
 
     total_unique = len(clumped_cards)
     total_quantity = sum(c['quantity'] for c in clumped_cards)
@@ -353,6 +363,135 @@ def api_card_delete(card_id):
         'success': True,
         'removed_from_decks': removed_from_decks,
     })
+
+
+def _bulk_delete_cards(data):
+    """Shared logic for bulk removal (partial or full per printing)."""
+    raw_items = []
+    for key in ('items', 'removals', 'cards', 'printings', 'entries'):
+        if isinstance(data, dict) and isinstance(data.get(key), list) and data.get(key):
+            raw_items = data.get(key)
+            break
+    if not raw_items and isinstance(data, dict):
+        for key in ('ids', 'card_ids', 'printing_ids', 'collection_card_ids'):
+            if isinstance(data.get(key), list) and data.get(key):
+                raw_items = [{'printing_id': i, 'quantity': None} for i in data.get(key)]
+                break
+    if not raw_items and isinstance(data, dict) and isinstance(data.get('names'), list):
+        # Remove every copy of each named card
+        raw_items = []
+        for n in data.get('names') or []:
+            if isinstance(n, str) and n.strip():
+                for row in Card.query.filter_by(name=n.strip()).all():
+                    raw_items.append({'printing_id': row.id, 'quantity': None, 'name': n.strip()})
+
+    removed_copies = 0
+    removed_printings = 0
+    updated_printings = 0
+    touched_names = set()
+    details = []
+    skipped = []
+
+    for item in raw_items or []:
+        printing_id = None
+        want = None
+        name_hint = None
+        if isinstance(item, (int, float)) and not isinstance(item, bool):
+            printing_id = int(item)
+        elif isinstance(item, str) and item.strip().isdigit():
+            printing_id = int(item.strip())
+        elif isinstance(item, str):
+            name_hint = item.strip()
+        elif isinstance(item, dict):
+            for k in ('printing_id', 'collection_card_id', 'card_id', 'id'):
+                if item.get(k) is not None:
+                    printing_id = item.get(k)
+                    break
+            for k in ('quantity', 'remove_quantity', 'qty', 'count', 'amount', 'remove'):
+                if k in item and item.get(k) is not None:
+                    want = item.get(k)
+                    break
+            name_hint = item.get('name') or item.get('card_name')
+
+        card = None
+        if printing_id is not None:
+            try:
+                card = Card.query.get(int(printing_id))
+            except (TypeError, ValueError):
+                card = None
+        if card is None and name_hint:
+            card = Card.query.filter_by(name=str(name_hint).strip()).first()
+
+        if card is None:
+            skipped.append(str(item))
+            continue
+
+        owned = int(card.quantity or 0)
+        if owned <= 0:
+            db.session.delete(card)
+            removed_printings += 1
+            touched_names.add(card.name)
+            details.append({'name': card.name, 'printing_id': card.id, 'removed': 0, 'action': 'deleted'})
+            continue
+
+        if want is None:
+            remove_qty = owned
+        else:
+            try:
+                remove_qty = int(want)
+            except (TypeError, ValueError):
+                remove_qty = owned
+        remove_qty = max(0, min(remove_qty, owned))
+
+        touched_names.add(card.name)
+        if remove_qty <= 0:
+            continue
+        removed_copies += remove_qty
+        if remove_qty >= owned:
+            db.session.delete(card)
+            removed_printings += 1
+            details.append({'name': card.name, 'printing_id': card.id, 'removed': remove_qty, 'action': 'deleted'})
+        else:
+            card.quantity = owned - remove_qty
+            updated_printings += 1
+            details.append({'name': card.name, 'printing_id': card.id, 'removed': remove_qty, 'remaining': card.quantity, 'action': 'decremented'})
+        db.session.flush()
+
+    removed_from_decks = 0
+    names_gone = []
+    for n in touched_names:
+        if Card.query.filter_by(name=n).count() == 0:
+            names_gone.append(n)
+    for n in names_gone:
+        removed_from_decks += DeckCard.query.filter_by(name=n).delete(synchronize_session=False)
+
+    db.session.commit()
+    return {
+        'success': True,
+        'removed_copies': removed_copies,
+        'removed_printings': removed_printings,
+        'updated_printings': updated_printings,
+        'removed_from_decks': removed_from_decks,
+        'names_gone': names_gone,
+        'skipped': skipped,
+        'details': details,
+    }
+
+
+@main.route('/api/collection/bulk-delete', methods=['POST'])
+@main.route('/api/collection/bulk-remove', methods=['POST'])
+def api_card_bulk_delete():
+    """Bulk-remove copies from the collection.
+
+    Accepts ``{items: [{printing_id|collection_card_id|card_id|id, quantity?}, …]}``
+    (also ``removals``/``cards``/``printings``, or ``{ids: […]}`` for full
+    removals). ``quantity`` is copies to remove from that printing row
+    (default: all owned). If the last copy of a name is gone, its deck slots
+    are removed too — mirroring the single-delete behaviour.
+    """
+    data = request.get_json(silent=True) or {}
+    _ensure_db()
+    return jsonify(_bulk_delete_cards(data))
 
 
 @main.route('/api/collection/storage-locations')

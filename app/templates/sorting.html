@@ -15,7 +15,7 @@
     </div>
 
     <div class="sorting-header-actions">
-      <button class="btn btn-primary btn-sm" id="btn-load-from-db" title="Import all decks from your local SQLite collection database">
+      <button class="btn btn-primary btn-sm" id="btn-load-from-db" title="Choose decks from your local SQLite collection database to import into SORTING">
         📥 Load from Local Collection
       </button>
       <button class="btn btn-ghost btn-sm" id="btn-export-sorting-json" title="Download SORTING backup JSON file">
@@ -40,13 +40,8 @@
 
   <!-- ── Panel 1: Decks ──────────────────────────────────────────────────────── -->
   <div class="sorting-panel" id="sorting-panel-decks">
-    
-    <div class="sorting-callout">
-      <div class="sorting-callout-text">
-        <strong>One physical copy can serve every deck that needs it.</strong><br />
-        Cards shared by two or more decks form your modular <strong>Pool</strong>. Each deck is assigned a color stripe at a specific slot along the sleeve's edge so you can easily sort, assemble, and deconstruct your decks.
-      </div>
-    </div>
+
+    <p class="page-subtitle sorting-subtitle">One physical copy can serve every deck that needs it — cards shared by 2+ decks form your Pool. Mark stripes to sort, assemble and deconstruct.</p>
 
     <!-- Existing Decks List -->
     <div id="sorting-decks-list"></div>
@@ -178,6 +173,28 @@
 
   </div>
 
+</div>
+
+<!-- ── Import from Local Collection: selection screen ─────────────────────── -->
+<div id="sorting-import-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-box" style="max-width:640px;">
+    <button class="modal-close" id="btn-close-import-picker" aria-label="Close">✕</button>
+    <div style="padding:1.5rem;">
+      <h3 style="margin-top:0; color:#fff; font-size:1.2rem; margin-bottom:0.5rem;">📥 Choose decks to import</h3>
+      <p class="form-hint">Select decks from your local collection to add to SORTING. Decks already in SORTING are marked and skipped.</p>
+      <input type="text" id="sorting-import-search" class="filter-input" placeholder="Search decks…" style="width:100%; margin-bottom:0.75rem;" />
+      <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.75rem; flex-wrap:wrap;">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-import-select-all">Select all new</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-import-clear">Clear</button>
+        <span id="sorting-import-count" style="margin-left:auto; font-size:0.85rem; color:var(--text-muted); font-family:var(--font-mono);">0 selected</span>
+      </div>
+      <div id="sorting-import-list" style="max-height:320px; overflow-y:auto; display:flex; flex-direction:column; gap:0.4rem;"></div>
+      <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.25rem;">
+        <button type="button" class="btn btn-ghost" id="btn-cancel-import-picker">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-confirm-import-picker" disabled>Import selected</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ── SCRY-Mode Fullscreen Walkthrough ──────────────────────────────────────── -->

@@ -1,7 +1,7 @@
 /**
  * SORTING Sleeve Marking & Modular Deck Builder — Local Client Engine
  * Local sleeve-marking tool for modular deck sorting.
- * Stores state in localStorage with 1-click sync to the local SQLite collection database.
+ * Stores state in localStorage with selection-screen import from the local SQLite collection database.
  */
 
 const SORTING_STORAGE_KEY = 'sorting_decks_data_v1';
@@ -116,11 +116,33 @@ function bindSortingEvents() {
     });
   });
 
-  // Load from local DB
+  // Load from local DB (opens selection screen)
   const btnLoadDb = document.getElementById('btn-load-from-db');
   if (btnLoadDb) {
     btnLoadDb.addEventListener('click', loadDecksFromLocalDatabase);
   }
+
+  // Import picker (selection screen)
+  const importClose = document.getElementById('btn-close-import-picker');
+  if (importClose) importClose.addEventListener('click', closeImportPicker);
+  const importCancel = document.getElementById('btn-cancel-import-picker');
+  if (importCancel) importCancel.addEventListener('click', closeImportPicker);
+  const importOverlay = document.getElementById('sorting-import-overlay');
+  if (importOverlay) importOverlay.addEventListener('click', (e) => { if (e.target === importOverlay) closeImportPicker(); });
+  const importConfirm = document.getElementById('btn-confirm-import-picker');
+  if (importConfirm) importConfirm.addEventListener('click', confirmImportSelected);
+  const importSelectAll = document.getElementById('btn-import-select-all');
+  if (importSelectAll) importSelectAll.addEventListener('click', () => {
+    document.querySelectorAll('#sorting-import-list [data-import-index]:not(:disabled)').forEach((box) => { box.checked = true; });
+    updateImportPickerCount();
+  });
+  const importClear = document.getElementById('btn-import-clear');
+  if (importClear) importClear.addEventListener('click', () => {
+    document.querySelectorAll('#sorting-import-list [data-import-index]').forEach((box) => { box.checked = false; });
+    updateImportPickerCount();
+  });
+  const importSearch = document.getElementById('sorting-import-search');
+  if (importSearch) importSearch.addEventListener('input', (e) => renderImportPicker(e.target.value));
 
   // Export & Import backup JSON
   const btnExportJson = document.getElementById('btn-export-sorting-json');
@@ -249,7 +271,9 @@ function selectSwatchColor(color) {
   });
 }
 
-// ── 1-Click Database Sync ─────────────────────────────────────────────────────
+// ── Import from Local Collection (selection screen) ──────────────────────────
+let pendingImportDecks = [];
+
 async function loadDecksFromLocalDatabase() {
   const btn = document.getElementById('btn-load-from-db');
   if (btn) btn.textContent = '⏳ Loading from DB…';
@@ -264,32 +288,100 @@ async function loadDecksFromLocalDatabase() {
       return;
     }
 
-    // Merge or replace
-    const existingNames = new Set(sortingState.decks.map((d) => d.name.toLowerCase()));
-    let addedCount = 0;
-
-    data.decks.forEach((importedDeck) => {
-      if (!existingNames.has(importedDeck.name.toLowerCase())) {
-        sortingState.decks.push({
-          id: 'deck_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-          name: importedDeck.name,
-          commander: importedDeck.commander || '',
-          bracket: 2,
-          color: importedDeck.color,
-          cardList: importedDeck.list,
-          cards: parseRawDecklist(importedDeck.list),
-        });
-        addedCount++;
-      }
-    });
-
-    saveSortingState();
-    renderSortingUI();
-    alert(`Successfully loaded ${addedCount} deck(s) from your local collection into SORTING!`);
+    pendingImportDecks = data.decks;
+    renderImportPicker('');
+    openImportPicker();
   } catch (err) {
     alert('Error loading decks: ' + err.message);
   } finally {
     if (btn) btn.textContent = '📥 Load from Local Collection';
+  }
+}
+
+function renderImportPicker(filter) {
+  const list = document.getElementById('sorting-import-list');
+  if (!list) return;
+  const q = (filter || '').toLowerCase();
+  const existingNames = new Set(sortingState.decks.map((d) => d.name.toLowerCase()));
+  const visible = pendingImportDecks.filter((d) =>
+    !q || d.name.toLowerCase().includes(q) || (d.commander || '').toLowerCase().includes(q)
+  );
+
+  if (!visible.length) {
+    list.innerHTML = '<p style="color:var(--text-muted);font-size:0.9rem;">No decks match.</p>';
+    updateImportPickerCount();
+    return;
+  }
+
+  list.innerHTML = visible.map((deck, i) => {
+    const idx = pendingImportDecks.indexOf(deck);
+    const isExisting = existingNames.has(deck.name.toLowerCase());
+    const cardCount = deck.cards ? deck.cards.length : (deck.list ? deck.list.split('\n').filter(Boolean).length : 0);
+    return `
+      <label class="sorting-import-item ${isExisting ? 'is-existing' : ''}">
+        <input type="checkbox" data-import-index="${idx}" ${isExisting ? 'disabled' : 'checked'} style="transform:scale(1.2); accent-color:var(--cyan);" />
+        <span class="sorting-import-dot" style="background:${deck.color || '#888'};"></span>
+        <span style="min-width:0; flex:1;">
+          <span style="display:block; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(deck.name)}</span>
+          <span style="display:block; font-size:0.8rem; color:var(--text-muted);">${deck.commander ? '👑 ' + escapeHtml(deck.commander) + ' · ' : ''}${cardCount} cards</span>
+        </span>
+        ${isExisting ? '<span class="badge badge-set">In SORTING</span>' : ''}
+      </label>
+    `;
+  }).join('');
+
+  list.querySelectorAll('[data-import-index]').forEach((box) => {
+    box.addEventListener('change', updateImportPickerCount);
+  });
+  updateImportPickerCount();
+}
+
+function updateImportPickerCount() {
+  const list = document.getElementById('sorting-import-list');
+  const countEl = document.getElementById('sorting-import-count');
+  const btn = document.getElementById('btn-confirm-import-picker');
+  const checked = list ? list.querySelectorAll('[data-import-index]:checked').length : 0;
+  if (countEl) countEl.textContent = `${checked} selected`;
+  if (btn) btn.disabled = checked === 0;
+}
+
+function openImportPicker() {
+  document.getElementById('sorting-import-overlay')?.classList.remove('hidden');
+  const search = document.getElementById('sorting-import-search');
+  if (search) { search.value = ''; search.focus(); }
+}
+
+function closeImportPicker() {
+  document.getElementById('sorting-import-overlay')?.classList.add('hidden');
+}
+
+function confirmImportSelected() {
+  const list = document.getElementById('sorting-import-list');
+  if (!list) return;
+  const existingNames = new Set(sortingState.decks.map((d) => d.name.toLowerCase()));
+  let addedCount = 0;
+  list.querySelectorAll('[data-import-index]:checked').forEach((box) => {
+    const deck = pendingImportDecks[Number(box.dataset.importIndex)];
+    if (!deck || existingNames.has(deck.name.toLowerCase())) return;
+    sortingState.decks.push({
+      id: 'deck_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+      name: deck.name,
+      commander: deck.commander || '',
+      bracket: 2,
+      color: deck.color || sortingPaletteColor(sortingState.decks.length),
+      cardList: deck.list || '',
+      cards: parseRawDecklist(deck.list || ''),
+    });
+    existingNames.add(deck.name.toLowerCase());
+    addedCount++;
+  });
+  closeImportPicker();
+  if (addedCount) {
+    saveSortingState();
+    renderSortingUI();
+    alert(`Added ${addedCount} deck(s) to SORTING!`);
+  } else {
+    alert('No new decks were selected.');
   }
 }
 
@@ -404,7 +496,7 @@ async function handleUrlImport() {
     if (data.commander) {
       document.getElementById('deck-commander-input').value = data.commander;
     }
-    // Re-load decks from collection if added
+    // Open the import picker so the new deck can be selected
     await loadDecksFromLocalDatabase();
     urlInput.value = '';
   } catch (err) {

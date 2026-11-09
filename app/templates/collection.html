@@ -9,6 +9,8 @@
   </div>
   <div class="header-right">
     <span class="result-count" id="result-count">Loading…</span>
+    <button id="btn-bulk-remove" class="btn btn-danger btn-sm hidden">🗑️ Remove selected (<span id="bulk-remove-count">0</span>)</button>
+    <button id="btn-bulk-clear" class="btn btn-ghost btn-sm hidden">Clear</button>
   </div>
 </div>
 
@@ -47,13 +49,18 @@
     <option value="false">Non-Foil Only</option>
   </select>
 
-  <select id="filter-sort" class="filter-select">
+  <select id="filter-sort" class="filter-select" title="Sort by">
     <option value="name">Sort: Name</option>
-    <option value="price_desc">Sort: Price (High to Low)</option>
-    <option value="price_asc">Sort: Price (Low to High)</option>
+    <option value="price">Sort: Price</option>
+    <option value="quantity">Sort: Quantity</option>
     <option value="cmc">Sort: Mana Value</option>
     <option value="rarity">Sort: Rarity</option>
     <option value="added_at">Sort: Date Added</option>
+  </select>
+
+  <select id="filter-order" class="filter-select" title="Sort direction (high / low)">
+    <option value="asc">↑ Low to High</option>
+    <option value="desc">↓ High to Low</option>
   </select>
 
   <select id="filter-per-page" class="filter-select" title="Items per page">
@@ -82,6 +89,7 @@
   <div id="card-table-wrapper" class="table-wrapper hidden">
     <table class="spreadsheet-table" id="card-table">
       <colgroup>
+        <col style="width: 36px;" />   <!-- Select -->
         <col style="width: 50px;" />   <!-- Qty -->
         <col style="width: 175px;" />  <!-- Name -->
         <col style="width: 88px;" />   <!-- Mana -->
@@ -96,17 +104,18 @@
       </colgroup>
       <thead>
         <tr>
-          <th style="width: 50px;" class="text-center">Qty</th>
-          <th>Card Name</th>
-          <th style="width: 88px;">Mana</th>
+          <th style="width: 36px;" class="text-center"><input type="checkbox" id="select-all-cards" title="Select all cards on this page" style="transform:scale(1.2); accent-color:var(--accent);" /></th>
+          <th style="width: 50px;" class="text-center sortable-th" data-sort="quantity" title="Sort by quantity">Qty<span class="sort-indicator"></span></th>
+          <th class="sortable-th" data-sort="name" title="Sort by name">Card Name<span class="sort-indicator"></span></th>
+          <th style="width: 88px;" class="sortable-th" data-sort="cmc" title="Sort by mana value">Mana<span class="sort-indicator"></span></th>
           <th style="width: 98px;">Type Line</th>
           <th style="width: 72px;" class="text-center">Set</th>
-          <th style="width: 82px;" class="text-center">Rarity</th>
+          <th style="width: 82px;" class="text-center sortable-th" data-sort="rarity" title="Sort by rarity">Rarity<span class="sort-indicator"></span></th>
           <th style="width: 58px;" class="text-center col-foil-th">Foil</th>
           <th class="col-storage-th">Storage</th>
           <th>Decks / SORTING Pool</th>
-          <th style="width: 84px;" class="text-right">Price (USD)</th>
-          <th style="width: 88px;" class="text-right">Price (CAD)</th>
+          <th style="width: 84px;" class="text-right sortable-th" data-sort="price" title="Sort by price (USD)">Price (USD)<span class="sort-indicator"></span></th>
+          <th style="width: 88px;" class="text-right sortable-th" data-sort="price" title="Sort by price (CAD)">Price (CAD)<span class="sort-indicator"></span></th>
         </tr>
       </thead>
       <tbody id="card-table-body"></tbody>
@@ -116,6 +125,23 @@
 
 <!-- Pagination -->
 <div id="pagination" class="pagination hidden"></div>
+
+<!-- Bulk remove confirmation (previews + per-printing quantities) -->
+<div id="bulk-remove-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-box" style="max-width:720px;">
+    <button class="modal-close" id="bulk-remove-close" aria-label="Close">✕</button>
+    <div style="padding:1.5rem;">
+      <h3 style="margin-top:0; color:#fff; font-size:1.2rem; margin-bottom:0.5rem;">🗑️ Remove from collection?</h3>
+      <p class="form-hint">Review each printing below and choose how many copies to remove. Cards with multiple printings show a preview of every printing. Removing the last copy of a name also removes it from decks.</p>
+      <div id="bulk-remove-list" style="max-height:380px; overflow-y:auto; display:flex; flex-direction:column; gap:0.75rem; margin-bottom:1rem;"></div>
+      <div id="bulk-remove-total" style="font-family:var(--font-mono); font-size:0.9rem; color:var(--text-muted); margin-bottom:1rem;"></div>
+      <div style="display:flex; justify-content:flex-end; gap:0.5rem;">
+        <button type="button" class="btn btn-ghost" id="bulk-remove-cancel">Cancel</button>
+        <button type="button" class="btn btn-danger" id="bulk-remove-confirm">Remove selected</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
