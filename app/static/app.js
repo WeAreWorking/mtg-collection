@@ -144,17 +144,31 @@ function renderCardModal(card, scryfallCard) {
   if (card.image_uri_back) {
     imageSectionHtml = `
       <div class="modal-image modal-image-dfc">
-        <img src="${card.image_uri}" alt="${name} front" loading="lazy" />
+        <img id="modal-main-image" src="${card.image_uri}" alt="${name} front" loading="lazy" />
         <img src="${card.image_uri_back}" alt="${name} back" loading="lazy" />
       </div>`;
   } else if (card.image_uri) {
     imageSectionHtml = `
       <div class="modal-image">
-        <img src="${card.image_uri}" alt="${name}" loading="lazy" />
+        <img id="modal-main-image" src="${card.image_uri}" alt="${name}" loading="lazy" />
       </div>`;
   } else {
     imageSectionHtml = `<div class="modal-image" style="background:var(--bg-elevated);border-radius:var(--radius-sm);aspect-ratio:63/88;display:flex;align-items:center;justify-content:center;color:var(--text-dim);">No image</div>`;
   }
+
+  const printingBrowserHtml = (card.id && printings.length > 0) ? `
+    <div class="printing-browser" id="printing-browser" style="margin-top:0.6rem;">
+      <div class="printing-browser-track">
+        ${printings.map((p, idx) => `
+          <button type="button" class="printing-browser-thumb ${idx === 0 ? 'active' : ''}" data-printing-id="${p.id}" data-image="${escHtml(p.image_uri || card.image_uri || '')}" title="${escHtml((p.set_code || '') + (p.collector_number ? ' #' + p.collector_number : '') + (p.foil ? ' Foil' : ''))} — click to preview">
+            ${p.image_uri || card.image_uri ? `<img class="printing-thumb" src="${p.image_uri || card.image_uri}" alt="${escHtml(name)} ${escHtml(p.set_code || '')}" loading="lazy" onerror="this.style.display='none'" />` : `<span class="printing-thumb-placeholder">No img</span>`}
+            <span class="printing-browser-label">${escHtml(p.set_code || '—')}${p.foil ? '✦' : ''} ×${p.quantity}</span>
+          </button>
+        `).join('')}
+      </div>
+      <p style="font-size:0.75rem;color:var(--text-dim);margin-top:0.4rem;">Scroll / click a printing to preview it. Hover a thumbnail in the list below for a large preview.</p>
+    </div>
+  ` : '';
 
   const printingsHtml = (card.id && printings.length > 0) ? `
     <div style="margin-top:1rem;background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:1rem;">
@@ -162,9 +176,14 @@ function renderCardModal(card, scryfallCard) {
         <div style="font-weight:700;color:#fff;">📚 Printings — ×${totalQty} total${printingsCount > 1 ? ` (${printingsCount} printings)` : ''}</div>
         <span class="badge badge-set">${escHtml((card.sets || []).join(' + ') || setCode || '—')}</span>
       </div>
+      ${printingBrowserHtml}
       <div style="display:flex;flex-direction:column;gap:0.5rem;">
         ${printings.map((p, idx) => `
-          <div class="printing-row" data-printing-id="${p.id}" style="display:grid;grid-template-columns:70px 1fr 90px 110px auto;gap:0.5rem;align-items:center;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:0.5rem 0.6rem;">
+          <div class="printing-row" data-printing-id="${p.id}" style="display:grid;grid-template-columns:44px 70px 1fr 90px 110px auto auto;gap:0.5rem;align-items:center;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:0.5rem 0.6rem;">
+            <span class="printing-thumb-wrap" data-image="${escHtml(p.image_uri || card.image_uri || '')}" title="${escHtml(name)} ${escHtml(p.set_code || '')}${p.foil ? ' Foil' : ''}">
+              ${p.image_uri || card.image_uri ? `<img class="printing-thumb" src="${p.image_uri || card.image_uri}" alt="${escHtml(name)} ${escHtml(p.set_code || '')}" loading="lazy" style="width:36px;height:50px;object-fit:cover;border-radius:3px;cursor:zoom-in;" onerror="this.style.display='none'" />` : `<span style="width:36px;height:50px;background:var(--bg-elevated);border-radius:3px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:0.6rem;">No img</span><span class="printing-hover-preview">${p.image_uri || card.image_uri ? `<img src="${p.image_uri || card.image_uri}" alt="" />` : ''}</span>`}
+              ${(p.image_uri || card.image_uri) ? `<span class="printing-hover-preview"><img src="${p.image_uri || card.image_uri}" alt="" /></span>` : ''}
+            </span>
             <span class="badge badge-set" title="Set • Collector #">${escHtml(p.set_code || '—')}${p.collector_number ? ' #' + escHtml(p.collector_number) : ''}</span>
             <span style="font-size:0.82rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(p.storage_location || '')}">${p.foil ? '✦ Foil • ' : ''}${escHtml(p.storage_location || 'Binder')}</span>
             <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.78rem;color:var(--text-dim);">Qty
@@ -174,6 +193,7 @@ function renderCardModal(card, scryfallCard) {
               <option value="false" ${!p.foil ? 'selected' : ''}>Non-foil</option>
               <option value="true" ${p.foil ? 'selected' : ''}>Foil ✦</option>
             </select>
+            <button type="button" class="btn btn-primary btn-sm printing-add-btn" data-id="${p.id}" title="Add one more copy of this exact printing (no need to look up the set code)">＋ Add</button>
             <button class="btn btn-ghost btn-sm printing-delete" data-id="${p.id}" title="Remove this printing">✕</button>
           </div>
         `).join('')}
@@ -184,7 +204,7 @@ function renderCardModal(card, scryfallCard) {
           <input type="text" class="filter-input" id="edit-storage-all" placeholder="e.g. SORTING Tray — leave blank to keep per-printing boxes" style="flex:1;" />
           <button type="button" class="btn btn-ghost btn-sm" id="btn-apply-storage-all">Apply to all</button>
         </div>
-        <p style="font-size:0.75rem;color:var(--text-dim);margin-top:0.4rem;">Per-printing qty/foil is saved with “Save Changes”. Deleting a printing removes only that set/foil copy; when the last copy is gone the card is also removed from decks.</p>
+        <p style="font-size:0.75rem;color:var(--text-dim);margin-top:0.4rem;">Per-printing qty/foil is saved with “Save Changes”. “＋ Add” adds one copy of that exact printing immediately. Deleting a printing removes only that set/foil copy; when the last copy is gone the card is also removed from decks.</p>
       </div>
     </div>
   ` : '';
@@ -423,6 +443,62 @@ function renderCardModal(card, scryfallCard) {
         loadNavStats();
       } catch (e) { alert('Error updating storage: ' + e.message); }
     });
+
+    // Printing browser: click thumb to preview, hover thumb for large preview
+    const browserThumbs = modalInner.querySelectorAll('.printing-browser-thumb');
+    const previewPrinting = (imgSrc) => {
+      const mainImg = document.getElementById('modal-main-image');
+      if (mainImg && imgSrc) mainImg.src = imgSrc;
+    };
+    browserThumbs.forEach(thumb => {
+      thumb.addEventListener('click', () => {
+        browserThumbs.forEach(t => t.classList.remove('active'));
+        thumb.classList.add('active');
+        previewPrinting(thumb.dataset.image);
+        modalInner.querySelectorAll('.printing-row').forEach(row => {
+          row.classList.toggle('printing-selected', row.dataset.printingId === thumb.dataset.printingId);
+        });
+      });
+      thumb.addEventListener('mouseenter', () => previewPrinting(thumb.dataset.image));
+    });
+    modalInner.querySelectorAll('.printing-thumb-wrap').forEach(wrap => {
+      wrap.addEventListener('mouseenter', () => previewPrinting(wrap.dataset.image));
+    });
+    modalInner.querySelectorAll('.printing-row').forEach(row => {
+      row.addEventListener('mouseenter', () => {
+        const img = row.querySelector('.printing-thumb');
+        if (img && img.src) previewPrinting(img.src);
+      });
+    });
+
+    // Add one copy of this exact printing (no set-code lookup needed)
+    modalInner.querySelectorAll('.printing-add-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const pid = btn.dataset.id;
+        const printing = printings.find(p => String(p.id) === String(pid));
+        if (!printing) return;
+        btn.disabled = true;
+        btn.textContent = '…';
+        try {
+          const current = printing.quantity || 0;
+          const updated = await apiFetch(`/api/collection/${pid}`, {
+            method: 'PUT',
+            body: JSON.stringify({ quantity: current + 1 }),
+          });
+          printing.quantity = updated.quantity != null ? updated.quantity : current + 1;
+          // Refresh modal + collection so totals/previews stay in sync
+          closeModal();
+          if (typeof loadCollection === 'function') await loadCollection();
+          loadNavStats();
+          // Reopen with fresh data so the new total is visible immediately
+          const fresh = lastCollectionCards.find(c => c.name === card.name) || card;
+          openCardModal({ ...fresh, printings: (fresh.printings && fresh.printings.length ? fresh.printings : printings) });
+        } catch (e) {
+          alert('Could not add a copy: ' + e.message);
+        } finally {
+        }
+      });
+    });
   }
 }
 
@@ -493,7 +569,54 @@ let lastCollectionCards = [];
 function toggleBulkSelection(card, checked) {
   if (checked) bulkSelected.set(card.name, card);
   else bulkSelected.delete(card.name);
+  // Keep every matching checkbox (table + grid) in sync
+  document.querySelectorAll('.bulk-select').forEach(cb => {
+    if (cb.dataset && cb.dataset.name === card.name) cb.checked = checked;
+  });
   updateBulkBar();
+}
+
+function selectAllOnPage() {
+  (lastCollectionCards || []).forEach(card => bulkSelected.set(card.name, card));
+  document.querySelectorAll('.bulk-select').forEach(cb => {
+    const card = (lastCollectionCards || []).find(c => c.name === cb.dataset.name);
+    cb.checked = !!card;
+  });
+  updateBulkBar();
+}
+
+async function selectAllMatchingFilter() {
+  // Fetch every page of the current filter (cap 1000/page) so "all matching"
+  // really means all filtered cards, not just the visible page.
+  const currentParams = new URLSearchParams({
+    q: document.getElementById('search-q')?.value.trim() || '',
+    in_deck: document.getElementById('filter-deck')?.value || '',
+    color: document.getElementById('filter-color')?.value || '',
+    rarity: document.getElementById('filter-rarity')?.value || '',
+    foil: document.getElementById('filter-foil')?.value || '',
+    sort: document.getElementById('filter-sort')?.value || 'name',
+    order: document.getElementById('filter-order')?.value || 'asc',
+    page: 1,
+    per_page: 1000,
+  });
+  try {
+    let page = 1;
+    let pages = 1;
+    while (page <= pages && page <= 10) {
+      currentParams.set('page', String(page));
+      const data = await apiFetch(`/api/collection?${currentParams.toString()}`);
+      (data.cards || []).forEach(card => bulkSelected.set(card.name, card));
+      pages = data.pages || 1;
+      page += 1;
+    }
+    document.querySelectorAll('.bulk-select').forEach(cb => {
+      cb.checked = bulkSelected.has(cb.dataset.name);
+    });
+    updateBulkBar();
+  } catch (e) {
+    // Fallback to current page if fetch fails
+    selectAllOnPage();
+  }
 }
 
 function updateBulkBar() {
@@ -525,7 +648,7 @@ function clearBulkSelection() {
   bulkSelected.clear();
   document.querySelectorAll('.bulk-select').forEach(cb => { cb.checked = false; });
   const selAll = document.getElementById('select-all-cards');
-  if (selAll) selAll.checked = false;
+  if (selAll) { selAll.checked = false; selAll.indeterminate = false; }
   updateBulkBar();
 }
 
@@ -624,11 +747,11 @@ function initCollectionPage() {
 
   // Bulk remove wiring
   document.getElementById('select-all-cards')?.addEventListener('change', (e) => {
-    document.querySelectorAll('.bulk-select').forEach(cb => {
-      cb.checked = e.target.checked;
-      cb.dispatchEvent(new Event('change'));
-    });
+    if (e.target.checked) selectAllOnPage();
+    else clearBulkSelection();
   });
+  document.getElementById('btn-select-all-page')?.addEventListener('click', selectAllOnPage);
+  document.getElementById('btn-select-all-filter')?.addEventListener('click', selectAllMatchingFilter);
   document.getElementById('btn-bulk-remove')?.addEventListener('click', openBulkRemove);
   document.getElementById('btn-bulk-clear')?.addEventListener('click', clearBulkSelection);
   document.getElementById('bulk-remove-close')?.addEventListener('click', closeBulkRemove);

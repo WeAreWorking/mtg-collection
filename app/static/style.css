@@ -671,6 +671,88 @@ code {
 }
 
 /* ── Card Detail Modal ─────────────────────────────────────────────────────── */
+.printing-browser {
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.6rem;
+}
+.printing-browser-track {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.35rem;
+}
+.printing-browser-thumb {
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  padding: 3px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+.printing-browser-thumb.active {
+  border-color: var(--cyan);
+  box-shadow: 0 0 10px rgba(5, 217, 232, 0.35);
+}
+.printing-browser-thumb img {
+  width: 44px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 3px;
+  display: block;
+}
+.printing-thumb-placeholder {
+  width: 44px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border-radius: 3px;
+  color: var(--text-dim);
+  font-size: 0.6rem;
+}
+.printing-browser-label {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.printing-thumb-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.printing-hover-preview {
+  display: none;
+  position: absolute;
+  left: 48px;
+  top: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+.printing-hover-preview img {
+  width: 160px;
+  height: auto;
+  border-radius: 6px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+  border: 1px solid var(--border);
+}
+.printing-thumb-wrap:hover .printing-hover-preview {
+  display: block;
+}
+.printing-row.printing-selected {
+  border-color: var(--cyan) !important;
+  box-shadow: 0 0 10px rgba(5, 217, 232, 0.25);
+}
+.printing-add-btn {
+  white-space: nowrap;
+}
 .modal-overlay {
   position: fixed;
   inset: 0;
