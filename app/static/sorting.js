@@ -1,16 +1,19 @@
 /**
- * SORTING Sleeve Marking & Modular Deck Builder — Local Client Engine
- * Local sleeve-marking tool for modular deck sorting.
- * Stores state in localStorage with selection-screen import from the local SQLite collection database.
+ * SORTING builder: works out which cards are shared between decks (the Pool)
+ * and which coloured stripes to mark on each card's inner sleeve.
+ *
+ * Decks are loaded from the app database (/api/sorting/sync-data) or pasted
+ * in. State (decks, marked cards, title) is kept in this browser's
+ * localStorage; use Export JSON to back it up or move it to another browser.
  */
 
 const SORTING_STORAGE_KEY = 'sorting_decks_data_v1';
 const SORTING_MARKED_KEY = 'sorting_marked_cards_v1';
 const SORTING_NAME_KEY = 'sorting_active_name_v1';
 
-// Official SORTING Palette — 48 colours (up to 48 decks per sleeve,
-// 96 with half-marks). Order interleaves hue families so
-// sequentially-owned decks get maximally distinct colours.
+// Stripe colours by slot: deck N uses SORTING_PALETTE[N - 1]. 48 slots
+// (96 with half-marks); the order alternates hue families so neighbouring
+// slots look different.
 const SORTING_PALETTE = [
   '#F44336', // Red
   '#2196F3', // Blue
@@ -65,12 +68,21 @@ const SORTING_PALETTE = [
 let sortingState = {
   name: localStorage.getItem(SORTING_NAME_KEY) || 'My SORTING Container',
   decks: [],
-  marked: JSON.parse(localStorage.getItem(SORTING_MARKED_KEY) || '{}'),
+  marked: _readJson(SORTING_MARKED_KEY, {}),
   activeTab: 'decks',
   activeFilter: 'all', // 'all', 'shared', 'undone'
   searchQuery: '',
   scryIndex: 0,
 };
+
+function _readJson(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
 
 // ── Initialization ────────────────────────────────────────────────────────────
 function initSortingApp() {
@@ -80,14 +92,14 @@ function initSortingApp() {
 }
 
 function loadSortingState() {
-  const savedDecks = localStorage.getItem(SORTING_STORAGE_KEY);
-  if (savedDecks) {
-    try {
-      sortingState.decks = JSON.parse(savedDecks);
-    } catch (e) {
-      sortingState.decks = [];
-    }
-  }
+  const decks = _readJson(SORTING_STORAGE_KEY, []);
+  sortingState.decks = Array.isArray(decks) ? decks : [];
+  // Re-parse saved lists so decks stored by older versions (whose parser
+  // dropped the last word of names like "Sol Ring") are corrected.
+  sortingState.decks.forEach((deck) => {
+    if (deck.cardList) deck.cards = parseRawDecklist(deck.cardList);
+  });
+  sortDecksBySlot();
 }
 
 function saveSortingState() {
@@ -180,7 +192,7 @@ function bindSortingEvents() {
     deckFileInput.addEventListener('change', handleDeckFileUpload);
   }
 
-  // Moxfield / Archidekt Import
+  // Archidekt URL import (into the database, then the picker)
   const btnImportUrl = document.getElementById('btn-import-deck-url');
   if (btnImportUrl) {
     btnImportUrl.addEventListener('click', handleUrlImport);
@@ -241,6 +253,40 @@ function switchTab(tabName) {
 // ── Color Swatches ────────────────────────────────────────────────────────────
 function sortingPaletteColor(deckIndex) {
   return SORTING_PALETTE[deckIndex % SORTING_PALETTE.length];
+}
+
+// Slot number (1–48) of a deck = position of its stripe colour in the palette;
+// null for a custom colour that isn't in the palette.
+function deckSlot(deck) {
+  const color = String(deck?.color || '').toLowerCase();
+  const idx = SORTING_PALETTE.findIndex((c) => c.toLowerCase() === color);
+  return idx >= 0 ? idx + 1 : null;
+}
+
+// First palette colour no loaded deck uses, so removing a deck frees its slot
+// instead of handing the next deck a colour that is already taken. When all
+// 48 are used, colours are reused (half-marks).
+function nextFreePaletteColor() {
+  const used = new Set(sortingState.decks.map((d) => String(d.color || '').toLowerCase()));
+  return SORTING_PALETTE.find((c) => !used.has(c.toLowerCase()))
+    || sortingPaletteColor(sortingState.decks.length);
+}
+
+// Keep decks in slot order so every view (deck list, sleeve preview,
+// SCRY-Mode, matrix) lists stripes in the same order as the markers.
+function sortDecksBySlot() {
+  const order = (d) => deckSlot(d) ?? Number.MAX_SAFE_INTEGER;
+  sortingState.decks.sort((a, b) => order(a) - order(b));
+}
+
+// Label for a deck's slot; a deck reusing a colour already taken by an
+// earlier deck is a half-mark.
+function deckSlotLabel(deck, idx) {
+  const slot = deckSlot(deck);
+  if (slot == null) return 'Custom colour';
+  const color = String(deck.color).toLowerCase();
+  const reused = sortingState.decks.slice(0, idx).some((d) => String(d.color || '').toLowerCase() === color);
+  return reused ? `Dot-split · Slot ${slot}b` : `Slot ${slot} / ${SORTING_PALETTE.length}`;
 }
 
 function renderColorSwatches() {
@@ -320,7 +366,6 @@ function renderImportPicker(filter) {
     return `
       <label class="sorting-import-item ${isExisting ? 'is-existing' : ''}">
         <input type="checkbox" data-import-index="${idx}" ${isExisting ? 'disabled' : 'checked'} style="transform:scale(1.2); accent-color:var(--cyan);" />
-        <span class="sorting-import-dot" style="background:${deck.color || '#888'};"></span>
         <span style="min-width:0; flex:1;">
           <span style="display:block; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(deck.name)}</span>
           <span style="display:block; font-size:0.8rem; color:var(--text-muted);">${deck.commander ? '👑 ' + escapeHtml(deck.commander) + ' · ' : ''}${cardCount} cards</span>
@@ -367,11 +412,11 @@ function confirmImportSelected() {
       id: 'deck_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
       name: deck.name,
       commander: deck.commander || '',
-      bracket: 2,
-      color: deck.color || sortingPaletteColor(sortingState.decks.length),
+      color: nextFreePaletteColor(),  // first free slot; colour N = slot N
       cardList: deck.list || '',
       cards: parseRawDecklist(deck.list || ''),
     });
+    sortDecksBySlot();
     existingNames.add(deck.name.toLowerCase());
     addedCount++;
   });
@@ -386,28 +431,31 @@ function confirmImportSelected() {
 }
 
 // ── Deck Parsing ──────────────────────────────────────────────────────────────
+// Same line format as the server importer (app/importer.py). A collector
+// number is only recognised after a set code, so "1 Sol Ring" stays whole.
+const DECK_LINE_RE = /^(\d+)x?\s+(.+?)(?:\s+\([A-Za-z0-9]+\)(?:\s+\S+)?)?\s*$/i;
+const SECTION_HEADER_RE = /^(?:\/+\s*)?(sideboard|commander|companion|maybeboard|mainboard|deck)\s*:?\s*$/i;
+
 function parseRawDecklist(rawText) {
   if (!rawText) return [];
-  const lines = rawText.split(/\r?\n/);
   const cards = [];
 
-  const lineRegex = /^(\d+)x?\s+(.+?)(?:\s+\([A-Za-z0-9]+\))?(?:\s+\S+)?\s*$/i;
-
-  lines.forEach((line) => {
+  rawText.split(/\r?\n/).forEach((line) => {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('#')) return;
+    if (SECTION_HEADER_RE.test(trimmed)) return;
 
-    // Remove foil tags
-    const clean = trimmed.replace(/\*F\*|\[foil\]/gi, '').trim();
-    const match = lineRegex.exec(clean);
+    // Strip finish markers and Archidekt category / label tags
+    const clean = trimmed
+      .replace(/\*F\*|\*E\*|\[foil\]/gi, '')
+      .replace(/\[[^\]]*\]/g, '')
+      .replace(/\^[^^]*\^/g, '')
+      .trim();
+    const match = DECK_LINE_RE.exec(clean);
     if (match) {
-      cards.push({
-        quantity: parseInt(match[1], 10),
-        name: match[2].trim(),
-      });
-    } else {
-      // Fallback: 1 copy
-      cards.push({ quantity: 1, name: clean });
+      cards.push({ quantity: parseInt(match[1], 10), name: match[2].trim() });
+    } else if (clean) {
+      cards.push({ quantity: 1, name: clean });  // bare card name
     }
   });
 
@@ -425,7 +473,7 @@ function handleAddDeck(e) {
 
   const name = nameInput.value.trim();
   const commander = commanderInput?.value.trim() || '';
-  const color = colorInput?.value || sortingPaletteColor(sortingState.decks.length);
+  const color = colorInput?.value || nextFreePaletteColor();
   const rawList = listInput.value.trim();
 
   if (!name || !rawList) {
@@ -433,8 +481,12 @@ function handleAddDeck(e) {
     return;
   }
 
-  if (sortingState.decks.length + 1 > SORTING_PALETTE.length) {
-    alert(`SORTING holds up to ${SORTING_PALETTE.length} distinct stripe colours. Deck ${(sortingState.decks.length + 1)} will reuse colour ${sortingPaletteColor(sortingState.decks.length)} — consider half-mark (dot-split) marking or a second sleeve set.`);
+  const sameColor = sortingState.decks.find((d) => String(d.color || '').toLowerCase() === color.toLowerCase());
+  if (sameColor) {
+    const msg = sortingState.decks.length >= SORTING_PALETTE.length
+      ? `All ${SORTING_PALETTE.length} stripe colours are in use, so this deck will share ${color} with "${sameColor.name}" as a half-mark (dot split). Continue?`
+      : `"${sameColor.name}" already uses ${color}. Two decks with the same stripe can't be told apart on a sleeve. Use it anyway?`;
+    if (!confirm(msg)) return;
   }
 
   const parsedCards = parseRawDecklist(rawList);
@@ -443,13 +495,13 @@ function handleAddDeck(e) {
     id: 'deck_' + Date.now(),
     name: name,
     commander: commander,
-    bracket: 2,
     color: color,
     cardList: rawList,
     cards: parsedCards,
   };
 
   sortingState.decks.push(newDeck);
+  sortDecksBySlot();
   saveSortingState();
 
   // Reset form
@@ -489,14 +541,7 @@ async function handleUrlImport() {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
 
-    // Auto-populate form
-    if (data.deck_name) {
-      document.getElementById('deck-name-input').value = data.deck_name;
-    }
-    if (data.commander) {
-      document.getElementById('deck-commander-input').value = data.commander;
-    }
-    // Open the import picker so the new deck can be selected
+    // The deck is now in the database; open the picker so it can be selected
     await loadDecksFromLocalDatabase();
     urlInput.value = '';
   } catch (err) {
@@ -548,6 +593,10 @@ function computeSortingCardData() {
 
 // ── UI Rendering ──────────────────────────────────────────────────────────────
 function renderSortingUI() {
+  // Pre-select the stripe colour of the next free slot for manually added decks
+  if (document.getElementById('sorting-swatches-container')?.children.length) {
+    selectSwatchColor(nextFreePaletteColor());
+  }
   renderDecksList();
   renderResults();
   updateHeaderDeckCount();
@@ -593,7 +642,7 @@ function renderDecksList() {
             <span>👑 ${escapeHtml(deck.commander || 'No commander listed')}</span>
           </div>
           <div class="sorting-deck-meta">
-            <span>Slot: ${idx + 1 > SORTING_PALETTE.length ? `Dot-split · Slot ${(idx % SORTING_PALETTE.length) + 1}b` : `Slot ${idx + 1} / ${SORTING_PALETTE.length}`}</span>
+            <span>${deckSlotLabel(deck, idx)}</span>
             <span>•</span>
             <span>${deck.cards ? deck.cards.length : 0} cards</span>
           </div>
@@ -650,7 +699,7 @@ function renderResults() {
   if (!tbody) return;
 
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 2rem; color: var(--text-muted);">No cards match the current filter.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding: 2rem; color: var(--text-muted);">No cards match the current filter.</td></tr>`;
     return;
   }
 
@@ -663,7 +712,7 @@ function renderResults() {
     const slotW = deckCount > 36 ? 5 : deckCount > 24 ? 7 : deckCount > 12 ? 9 : 12;
     const sleeveSlotsHtml = sortingState.decks.map((deck, deckIdx) => {
       const active = card.decks.some((d) => d.id === deck.id);
-      return `<div class="sleeve-slot ${active ? 'active' : ''}" style="width:${slotW}px;${active ? `background:${deck.color}; box-shadow: 0 0 6px ${deck.color};` : ''}" title="Slot ${deckIdx + 1} · ${escapeHtml(deck.name)}${active ? ' · ' + deck.color : ''}"></div>`;
+      return `<div class="sleeve-slot ${active ? 'active' : ''}" style="width:${slotW}px;${active ? `background:${deck.color}; box-shadow: 0 0 6px ${deck.color};` : ''}" title="Slot ${deckSlot(deck) ?? deckIdx + 1} · ${escapeHtml(deck.name)}${active ? ' · ' + deck.color : ''}"></div>`;
     }).join('');
 
     const deckBadges = card.decks.map((d) => `
@@ -768,6 +817,7 @@ function importSortingBackup(e) {
       const data = JSON.parse(event.target.result);
       if (data.decks && Array.isArray(data.decks)) {
         sortingState.decks = data.decks;
+        sortDecksBySlot();
         sortingState.name = data.name || sortingState.name;
         sortingState.marked = data.marked || {};
         saveSortingState();
@@ -785,10 +835,11 @@ function importSortingBackup(e) {
 
 function exportSortingCSV() {
   const cards = computeSortingCardData();
+  const q = (v) => `"${String(v).replace(/"/g, '""')}"`;
   let csv = 'Card Name,Type,Decks Count,Decks,Marked\n';
   cards.forEach((c) => {
     const deckNames = c.decks.map((d) => d.name).join('; ');
-    csv += `"${c.name}","${c.isPool ? 'Pool' : 'Core'}",${c.deckCount},"${deckNames}","${c.isMarked ? 'Yes' : 'No'}"\n`;
+    csv += `${q(c.name)},${q(c.isPool ? 'Pool' : 'Single deck')},${c.deckCount},${q(deckNames)},${q(c.isMarked ? 'Yes' : 'No')}\n`;
   });
 
   const blob = new Blob([csv], { type: 'text/csv' });
@@ -848,7 +899,7 @@ function renderScryCard() {
       return `
         <div class="scry-stripe-item" style="display:flex; flex-direction:column; align-items:center; gap: 0.5rem;">
           <div style="width: ${stripeW}px; height: 50px; border-radius: 4px; background: ${active ? deck.color : 'rgba(255,255,255,0.06)'}; box-shadow: ${active ? `0 0 12px ${deck.color}` : 'none'};"></div>
-          <span class="scry-stripe-label" style="font-size: 0.75rem; color: ${active ? '#fff' : 'var(--text-dim)'};">${deckIdx + 1} · ${escapeHtml(deck.name)}</span>
+          <span class="scry-stripe-label" style="font-size: 0.75rem; color: ${active ? '#fff' : 'var(--text-dim)'};">${deckSlot(deck) ?? deckIdx + 1} · ${escapeHtml(deck.name)}</span>
         </div>
       `;
     }).join('');
@@ -881,7 +932,7 @@ function escapeJs(str) {
   return str.replace(/'/g, "\\'");
 }
 
-// Auto-run if container present
+// Start only on the SORTING page
 document.addEventListener('DOMContentLoaded', () => {
   if (document.getElementById('sorting-builder-container')) {
     initSortingApp();

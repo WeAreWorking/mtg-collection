@@ -1,130 +1,92 @@
 """
-Market pricing service for MTG Collection.
-Fetches USD to CAD exchange rates and handles pricing calculations
-across the top 3 US single card markets (TCGplayer, Card Kingdom, Cardhoarder/Market Index).
+Card pricing helpers.
+
+Prices come from Scryfall and are cached on each ``Card`` row:
+
+- ``price_usd`` / ``price_usd_foil``: TCGplayer market price in USD
+- ``price_market3``: MTGO price in tickets (tix), as listed by Cardhoarder
+
+CAD values are derived from the USD price with a live USD→CAD exchange rate
+(open.er-api.com, falling back to frankfurter.app, then to a fixed default),
+cached in memory for an hour.
 """
-import time
 import json
+import time
 import urllib.request
-import urllib.error
-from datetime import datetime
 
-# Fallback exchange rate if offline
 DEFAULT_USD_CAD_RATE = 1.40
-
-# In-memory cache for currency rates (1 hour TTL)
-_RATE_CACHE = {
-    'rate': DEFAULT_USD_CAD_RATE,
-    'last_updated': 0,
-}
+RATE_TTL_SECONDS = 3600
+_RATE_SOURCES = (
+    'https://open.er-api.com/v6/latest/USD',
+    'https://api.frankfurter.app/latest?from=USD&to=CAD',
+)
+_RATE_CACHE = {'rate': DEFAULT_USD_CAD_RATE, 'last_updated': 0.0}
 
 
 def get_usd_to_cad_rate() -> float:
-    """
-    Fetch the current USD to CAD exchange rate using open exchange rate API.
-    Caches the rate for 1 hour to prevent redundant external calls.
-    """
+    """Current USD→CAD rate; the last good rate (or the default) if offline."""
     now = time.time()
-    if now - _RATE_CACHE['last_updated'] < 3600 and _RATE_CACHE['rate']:
+    if now - _RATE_CACHE['last_updated'] < RATE_TTL_SECONDS:
         return _RATE_CACHE['rate']
 
-    try:
-        req = urllib.request.Request(
-            'https://open.er-api.com/v6/latest/USD',
-            headers={'User-Agent': 'MTGCollectionApp/1.0'}
-        )
-        with urllib.request.urlopen(req, timeout=5) as response:
-            data = json.loads(response.read().decode('utf-8'))
-            cad = data.get('rates', {}).get('CAD')
-            if cad and isinstance(cad, (int, float)):
+    for url in _RATE_SOURCES:
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'MTGCollectionManager/1.0'})
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read().decode('utf-8'))
+            cad = (data.get('rates') or {}).get('CAD')
+            if isinstance(cad, (int, float)) and cad > 0:
                 _RATE_CACHE['rate'] = round(float(cad), 4)
                 _RATE_CACHE['last_updated'] = now
                 return _RATE_CACHE['rate']
-    except Exception:
-        # Fallback to secondary source or cached/default rate
-        try:
-            req = urllib.request.Request(
-                'https://api.frankfurter.app/latest?from=USD&to=CAD',
-                headers={'User-Agent': 'MTGCollectionApp/1.0'}
-            )
-            with urllib.request.urlopen(req, timeout=4) as response:
-                data = json.loads(response.read().decode('utf-8'))
-                cad = data.get('rates', {}).get('CAD')
-                if cad and isinstance(cad, (int, float)):
-                    _RATE_CACHE['rate'] = round(float(cad), 4)
-                    _RATE_CACHE['last_updated'] = now
-                    return _RATE_CACHE['rate']
         except Exception:
-            pass
+            continue
 
-    return _RATE_CACHE['rate'] or DEFAULT_USD_CAD_RATE
+    # Both sources failed: keep the previous rate and retry in 5 minutes
+    _RATE_CACHE['last_updated'] = now - RATE_TTL_SECONDS + 300
+    return _RATE_CACHE['rate']
+
+
+def active_usd_price(card) -> float | None:
+    """USD price for the copy's finish, falling back to the other finish."""
+    usd = getattr(card, 'price_usd', None)
+    foil_usd = getattr(card, 'price_usd_foil', None)
+    if getattr(card, 'foil', False):
+        return foil_usd if foil_usd is not None else usd
+    return usd if usd is not None else foil_usd
+
+
+def _money(value, prefix):
+    return f'{prefix}{value:,.2f}' if value is not None else '—'
 
 
 def calculate_card_market_prices(card, rate: float = None) -> dict:
-    """
-    Calculate market pricing across the top 3 US single card markets in USD and CAD.
-    Top 3 US markets:
-      1. TCGplayer (Market Price)
-      2. Card Kingdom (Retail Market)
-      3. Cardhoarder / Liquidity Index (Pegged MTGO/Paper Index)
-    """
+    """Price summary for one card row: TCGplayer in USD and CAD, MTGO in tix."""
     if rate is None:
         rate = get_usd_to_cad_rate()
 
-    foil = getattr(card, 'foil', False)
-    
-    # 1. TCGplayer Market Price (from Scryfall cached price)
-    price_usd = None
-    if foil:
-        price_usd = getattr(card, 'price_usd_foil', None) or getattr(card, 'price_usd', None)
-    else:
-        price_usd = getattr(card, 'price_usd', None) or getattr(card, 'price_usd_foil', None)
-
-    # 2. Card Kingdom (Retail estimate: Card Kingdom averages ~12% premium over TCG Market)
-    ck_usd = getattr(card, 'price_cardkingdom', None)
-    if ck_usd is None and price_usd is not None:
-        ck_usd = round(price_usd * 1.12, 2)
-
-    # 3. Cardhoarder / US Market Index
-    ch_usd = getattr(card, 'price_market3', None)
-    if ch_usd is None and price_usd is not None:
-        ch_usd = round(price_usd * 0.95, 2)
-
-    def _format_market(usd_val):
-        if usd_val is None:
-            return {'usd': None, 'cad': None, 'usd_fmt': '—', 'cad_fmt': '—'}
-        cad_val = round(usd_val * rate, 2)
-        return {
-            'usd': round(usd_val, 2),
-            'cad': cad_val,
-            'usd_fmt': f"${usd_val:,.2f}",
-            'cad_fmt': f"C${cad_val:,.2f}",
-        }
-
-    tcg = _format_market(price_usd)
-    ck = _format_market(ck_usd)
-    ch = _format_market(ch_usd)
+    usd = active_usd_price(card)
+    usd = round(usd, 2) if usd is not None else None
+    cad = round(usd * rate, 2) if usd is not None else None
+    tix = getattr(card, 'price_market3', None)
 
     return {
         'rate_usd_cad': rate,
-        'foil': foil,
+        'foil': bool(getattr(card, 'foil', False)),
         'tcgplayer': {
-            'name': 'TCGplayer (Market)',
-            'description': 'Primary US Singles Marketplace (Scryfall)',
-            **tcg,
+            'name': 'TCGplayer (market)',
+            'usd': usd,
+            'cad': cad,
+            'usd_fmt': _money(usd, '$'),
+            'cad_fmt': _money(cad, 'C$'),
         },
-        'cardkingdom': {
-            'name': 'Card Kingdom (Retail)',
-            'description': 'Top US Online Retailer',
-            **ck,
+        'mtgo': {
+            'name': 'MTGO (Cardhoarder)',
+            'tix': tix,
+            'tix_fmt': f'{tix:,.2f} tix' if tix is not None else '—',
         },
-        'cardhoarder': {
-            'name': 'Cardhoarder / Index',
-            'description': 'US Liquid Trading Index',
-            **ch,
-        },
-        'primary_usd': tcg['usd'],
-        'primary_cad': tcg['cad'],
-        'primary_usd_fmt': tcg['usd_fmt'],
-        'primary_cad_fmt': tcg['cad_fmt'],
+        'primary_usd': usd,
+        'primary_cad': cad,
+        'primary_usd_fmt': _money(usd, '$'),
+        'primary_cad_fmt': _money(cad, 'C$'),
     }

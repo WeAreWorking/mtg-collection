@@ -1161,3 +1161,43 @@ code {
 }
 
 .hidden { display: none !important; }
+
+
+/* ── Deck recommendations (EDHREC top cards from your collection) ───────── */
+.deck-recs-panel {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 200, 60, 0.25);
+  border-radius: 8px;
+}
+.deck-recs-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; }
+.deck-recs-title { font-weight: 700; color: #ffc83c; font-size: 0.95rem; }
+.deck-recs-controls { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin: 0.6rem 0; }
+.deck-recs-list { max-height: 420px; overflow-y: auto; }
+.rec-row {
+  display: flex; align-items: center; gap: 0.65rem;
+  padding: 0.45rem 0.5rem; border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.rec-row:hover { background: rgba(255, 255, 255, 0.03); }
+.rec-rank {
+  width: 2.2rem; flex-shrink: 0; text-align: right;
+  font-family: var(--font-mono); font-weight: 700; color: var(--text-muted); font-size: 0.85rem;
+}
+.rec-row.rec-top .rec-rank { color: #ffc83c; }
+.rec-thumb { width: 38px; height: 52px; object-fit: cover; border-radius: 3px; flex-shrink: 0; }
+.rec-main { flex: 1; min-width: 0; }
+.rec-name { font-weight: 700; color: #fff; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rec-name a { color: inherit; text-decoration: none; }
+.rec-name a:hover { text-decoration: underline; }
+.rec-sub { font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); }
+.rec-stats { width: 150px; flex-shrink: 0; font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); }
+.rec-bar { height: 6px; background: rgba(255, 255, 255, 0.08); border-radius: 3px; overflow: hidden; margin-bottom: 0.2rem; }
+.rec-bar > span { display: block; height: 100%; background: linear-gradient(90deg, #ffc83c, #ff8a3c); }
+.rec-syn-pos { color: #5ee08a; }
+.rec-syn-neg { color: var(--text-dim, #888); }
+.rec-actions { display: flex; align-items: center; gap: 0.35rem; flex-shrink: 0; }
+@media (max-width: 640px) {
+  .rec-stats { width: 100px; }
+  .rec-actions select { display: none; }
+}

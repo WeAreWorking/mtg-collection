@@ -21,6 +21,7 @@
       <button id="deck-panel-back" class="btn btn-ghost">← Back to Decks</button>
       <div style="display:flex; gap:0.5rem;">
         <button id="btn-edit-deck" class="btn btn-ghost btn-sm" title="Rename deck or change format">✏️ Edit Deck</button>
+        <button id="btn-toggle-recs" class="btn btn-ghost btn-sm" title="EDHREC top cards for this commander that you already own">⭐ Recommendations</button>
         <button id="btn-toggle-add-card" class="btn btn-primary btn-sm">➕ Add Card from Collection</button>
         <button id="deck-panel-delete" class="btn btn-danger btn-sm">Delete Deck</button>
       </div>
@@ -35,8 +36,8 @@
     <div id="deck-size-warning"></div>
     <div id="deck-identity-banner" class="deck-identity-banner" style="margin-top:0.5rem;"></div>
     <p class="form-hint" style="margin-top:0.5rem;">
-      Removing a card here only removes it from this deck — it stays in your collection. To remove it from the collection, open the Collection tab.
-      Commander decks expect 100 cards; most other formats expect 60; Draft / Sealed expects 40.
+      Removing a card here only removes it from this deck; it stays in your collection.
+      Deck size counts the commander and mainboard (not the sideboard): 100 for Commander, 40 for Draft / Sealed, 60 for other formats.
     </p>
 
     <!-- Add Card from Collection Panel -->
@@ -64,6 +65,31 @@
       </label>
       <div id="deck-printing-preview" class="deck-printing-preview hidden" style="margin-top:0.75rem;display:flex;gap:0.75rem;align-items:flex-start;"></div>
       <div id="deck-card-search-results" class="deck-card-search-results hidden" style="margin-top:0.75rem; max-height:260px; overflow-y:auto;"></div>
+    </div>
+
+    <!-- EDHREC recommendations from your collection -->
+    <div id="deck-recs-panel" class="deck-recs-panel hidden">
+      <div class="deck-recs-head">
+        <div>
+          <div class="deck-recs-title">⭐ Recommended from your Collection</div>
+          <div id="deck-recs-meta" class="form-hint" style="margin:0.2rem 0 0;"></div>
+        </div>
+        <button id="btn-close-recs" class="btn btn-ghost btn-sm" style="padding:2px 8px;">✕</button>
+      </div>
+      <div class="deck-recs-controls">
+        <label class="form-hint" for="deck-recs-sort" style="margin:0;">Sort</label>
+        <select id="deck-recs-sort" class="filter-select">
+          <option value="top" selected>🏆 Top cards (inclusion %)</option>
+          <option value="synergy">✨ Synergy</option>
+          <option value="decks">📊 Most decks</option>
+          <option value="name">🔤 Name</option>
+        </select>
+        <select id="deck-recs-category" class="filter-select">
+          <option value="">All EDHREC lists</option>
+        </select>
+        <button id="btn-recs-refresh" class="btn btn-ghost btn-sm" title="Re-fetch from EDHREC (otherwise cached for 7 days)">↻ Refresh</button>
+      </div>
+      <div id="deck-recs-list" class="deck-recs-list"></div>
     </div>
   </div>
 

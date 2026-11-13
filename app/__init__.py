@@ -1,3 +1,4 @@
+"""Flask application factory. The SQLite database lives in ``data/collection.db``."""
 import os
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
@@ -8,7 +9,7 @@ db = SQLAlchemy()
 def create_app():
     app = Flask(__name__)
 
-    # Data directory — mapped to a TrueNAS dataset volume in production
+    # In Docker, /app/data is a mounted volume (MTG_DATA_PATH in docker-compose)
     data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
     os.makedirs(data_dir, exist_ok=True)
 
@@ -31,7 +32,11 @@ def create_app():
 
 
 def _migrate_columns():
-    """Ensure newly added columns exist in the SQLite database without requiring external tools."""
+    """Add columns introduced after a database was created.
+
+    ``db.create_all()`` creates missing tables but never alters existing ones,
+    so new columns are added here with ``ALTER TABLE``.
+    """
     from sqlalchemy import text
     try:
         with db.engine.connect() as conn:
@@ -50,7 +55,7 @@ def _migrate_columns():
                 if col_name not in existing_cols:
                     conn.execute(text(f"ALTER TABLE cards ADD COLUMN {col_name} {col_type}"))
 
-            # DeckCard colour identity (Commander colour restrictions)
+            # DeckCard.color_identity (Commander colour restrictions)
             try:
                 deck_cards_result = conn.execute(text("PRAGMA table_info(deck_cards)"))
                 deck_cards_cols = {row[1] for row in deck_cards_result.fetchall()}
@@ -59,8 +64,7 @@ def _migrate_columns():
             except Exception:
                 pass
 
-            # Legacy decks with empty or numeric-only format (e.g. "3") default
-            # to Commander on first run after this change.
+            # Empty or numeric formats (Archidekt format IDs such as "3") become Commander
             try:
                 decks_result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='decks'"))
                 if decks_result.fetchone() is not None:

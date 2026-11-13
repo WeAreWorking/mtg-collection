@@ -1,6 +1,6 @@
 # Install - TrueNAS SCALE Custom App (native, no Dockge)
 
-TrueNAS SCALE has a built-in **Custom App** (Docker Compose) that does the same job as Dockge - it pull the GHCR image and lets you set variables in the TrueNAS UI instead of editing a `.env` file. This is the cleanest long-term option and the path to a future catalog entry.
+TrueNAS SCALE has a built-in **Custom App** (Docker Compose) that does the same job as Dockge - it pulls the GHCR image and lets you set variables in the TrueNAS UI instead of editing a `.env` file. This is the cleanest long-term option and the path to a future catalog entry.
 
 You still don't need SSH or a git clone.
 

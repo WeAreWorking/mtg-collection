@@ -1,11 +1,14 @@
 """
-Scryfall API client.
-Docs: https://scryfall.com/docs/api
+Scryfall API client (https://scryfall.com/docs/api).
 
-Bulk lookups use Scryfall's /cards/collection endpoint, which accepts
-up to 75 identifiers in a single POST request. This avoids hitting rate limits.
+Bulk lookups use ``POST /cards/collection`` (up to 75 identifiers per
+request). A short delay between requests keeps well inside Scryfall's rate
+limit, and HTTP 429 responses are retried with backoff.
 """
 import time
+from datetime import datetime
+from urllib.parse import quote
+
 import requests
 
 BASE_URL = 'https://api.scryfall.com'
@@ -14,14 +17,19 @@ HEADERS = {
     'Accept': 'application/json',
     'Content-Type': 'application/json',
 }
-RATE_DELAY = 0.1  # seconds between requests
+RATE_DELAY = 0.1  # seconds between requests (Scryfall asks for 50–100 ms)
+BATCH_SIZE = 75   # /cards/collection limit
 
-# In-memory card cache to avoid repeated requests for the same card
+# Process-lifetime cache of full card objects fetched by ID (card modal)
 _CACHE = {}
 
 
 def _request_with_retry(method: str, path: str, **kwargs) -> dict | None:
-    """Make an HTTP request with automatic retry on 429 rate limit."""
+    """GET/POST with up to 4 attempts, retrying on HTTP 429 and network errors.
+
+    Returns the decoded JSON body, or None on any other status or after the
+    last attempt.
+    """
     url = f'{BASE_URL}{path}' if path.startswith('/') else path
     kwargs.setdefault('headers', HEADERS)
     kwargs.setdefault('timeout', 15)
@@ -35,14 +43,10 @@ def _request_with_retry(method: str, path: str, **kwargs) -> dict | None:
 
             if resp.status_code == 200:
                 return resp.json()
-            elif resp.status_code == 429:
-                wait = 3.0 * (attempt + 1)
-                time.sleep(wait)
+            if resp.status_code == 429:
+                time.sleep(3.0 * (attempt + 1))
                 continue
-            elif resp.status_code == 404:
-                return None
-            else:
-                return None
+            return None
         except requests.RequestException:
             time.sleep(0.5)
 
@@ -50,11 +54,7 @@ def _request_with_retry(method: str, path: str, **kwargs) -> dict | None:
 
 
 def get_card_named(name: str, set_code: str = None) -> dict | None:
-    """
-    Fetch a single card by exact name (and optionally set code).
-    Uses /cards/named with fuzzy matching as a fallback.
-    Returns the Scryfall card object or None if not found.
-    """
+    """Fetch one card with ``/cards/named?fuzzy=`` (front face for DFCs), optionally in a set."""
     clean_name = name.split(' // ')[0].strip() if ' // ' in name else name
     params = {'fuzzy': clean_name}
     if set_code:
@@ -76,10 +76,21 @@ def get_card_by_id(scryfall_id: str) -> dict | None:
     return data
 
 
+def get_card_by_set_number(set_code: str, collector_number: str) -> dict | None:
+    """Fetch one exact printing with ``/cards/<set>/<collector_number>``."""
+    path = f'/cards/{quote(set_code.lower(), safe="")}/{quote(str(collector_number), safe="")}'
+    data = _request_with_retry('GET', path)
+    time.sleep(RATE_DELAY)
+    return data
+
+
+def printing_key(set_code: str, collector_number: str) -> tuple:
+    """``card_map`` key for an exact printing (set + collector number)."""
+    return ('#', (set_code or '').upper(), str(collector_number or '').lower())
+
+
 def search_cards(query: str, page: int = 1) -> dict | None:
-    """
-    Search for cards using Scryfall's full-text search syntax.
-    """
+    """Run a Scryfall full-text search (``/cards/search``)."""
     params = {'q': query, 'page': page}
     data = _request_with_retry('GET', '/cards/search', params=params)
     time.sleep(RATE_DELAY)
@@ -87,10 +98,7 @@ def search_cards(query: str, page: int = 1) -> dict | None:
 
 
 def extract_image_uris(card: dict) -> tuple[str | None, str | None]:
-    """
-    Return (front_image_uri, back_image_uri) for a card.
-    Handles both normal cards and double-faced cards (DFCs).
-    """
+    """Return ``(front, back)`` "normal"-size image URLs; back is None for single-faced cards."""
     front = None
     back = None
 
@@ -107,10 +115,7 @@ def extract_image_uris(card: dict) -> tuple[str | None, str | None]:
 
 
 def flatten_card(card: dict) -> dict:
-    """
-    Extract the fields we care about from a Scryfall card object
-    into a flat dict suitable for saving to the database.
-    """
+    """Map a Scryfall card object to ``Card`` column values."""
     front_img, back_img = extract_image_uris(card)
 
     colors = card.get('colors', [])
@@ -126,21 +131,22 @@ def flatten_card(card: dict) -> dict:
     if not mana_cost and 'card_faces' in card:
         mana_cost = card['card_faces'][0].get('mana_cost', '')
 
-    prices = card.get('prices', {}) or {}
-    price_usd = float(prices['usd']) if prices.get('usd') else None
-    price_usd_foil = float(prices['usd_foil']) if prices.get('usd_foil') else None
-    price_market3 = float(prices['tix']) if prices.get('tix') else None
-    
-    # Card Kingdom retail baseline (Card Kingdom averages ~12% above TCGplayer market)
-    price_cardkingdom = round(price_usd * 1.12, 2) if price_usd else None
+    prices = card.get('prices') or {}
 
-    # Calculate CAD
+    def _price(key):
+        value = prices.get(key)
+        return float(value) if value else None
+
+    price_usd = _price('usd')
+    # Etched foils only have a usd_etched price; treat it as the foil price
+    price_usd_foil = _price('usd_foil')
+    if price_usd_foil is None:
+        price_usd_foil = _price('usd_etched')
+    price_tix = _price('tix')
+
     from .pricing import get_usd_to_cad_rate
-    cad_rate = get_usd_to_cad_rate()
-    price_cad = round((price_usd or 0.0) * cad_rate, 2) if price_usd is not None else None
-
-    from datetime import datetime
-    prices_updated_at = datetime.utcnow() if (price_usd is not None or price_usd_foil is not None) else None
+    price_cad = round(price_usd * get_usd_to_cad_rate(), 2) if price_usd is not None else None
+    has_price = price_usd is not None or price_usd_foil is not None
 
     return {
         'scryfall_id': card.get('id'),
@@ -161,21 +167,23 @@ def flatten_card(card: dict) -> dict:
         'price_usd': price_usd,
         'price_usd_foil': price_usd_foil,
         'price_cad': price_cad,
-        'price_cardkingdom': price_cardkingdom,
-        'price_market3': price_market3,
-        'prices_updated_at': prices_updated_at,
+        'price_market3': price_tix,
+        'prices_updated_at': datetime.utcnow() if has_price else None,
     }
 
 
 def lookup_cards_bulk(entries: list[dict]) -> dict:
-    """
-    Lookup a list of card entries (each has 'scryfall_id', or 'name' and optional 'set_code')
-    using Scryfall's bulk /cards/collection endpoint (75 per batch).
+    """Resolve many cards with ``/cards/collection``, 75 per request.
 
-    Returns a dict mapping:
-        card['scryfall_id'] -> flattened_card_dict
-        (name.lower(), set_code.upper() if set_code else None) -> flattened_card_dict
-        (name.lower(), None) -> flattened_card_dict
+    Each entry has ``scryfall_id`` or ``name`` (+ optional ``set_code`` and
+    ``collector_number``). With a set and collector number the exact printing
+    is requested. Duplicate identifiers are sent once; an unknown set +
+    collector number is retried by name + set, and a name not found in its set
+    is retried by name alone.
+
+    Returns flattened cards keyed by Scryfall ID, :func:`printing_key`,
+    ``(name_lower, SET)`` and ``(name_lower, None)``; double-faced cards are
+    also keyed by front face.
     """
     if not entries:
         return {}
@@ -190,41 +198,55 @@ def lookup_cards_bulk(entries: list[dict]) -> dict:
 
         if sid:
             card_map[sid] = flat
+        if set_code and flat['collector_number']:
+            card_map[printing_key(set_code, flat['collector_number'])] = flat
         card_map[(name_lower, set_code)] = flat
         card_map[(name_lower, None)] = flat
 
-        # For double-faced / split cards, also map front face
+        # Also key double-faced / split cards by their front face
         if ' // ' in flat['name']:
             front = flat['name'].split(' // ')[0].strip().lower()
             card_map[(front, set_code)] = flat
             card_map[(front, None)] = flat
 
-    chunk_size = 75
-    chunks = [entries[i:i + chunk_size] for i in range(0, len(entries), chunk_size)]
+    identifiers = []
+    seen = set()
+    # (set, collector_number) → name, to retry printings Scryfall doesn't know
+    printing_names = {}
+    for e in entries:
+        if e.get('scryfall_id'):
+            item = {'id': e['scryfall_id']}
+        elif e.get('set_code') and e.get('collector_number'):
+            item = {'set': e['set_code'].lower(), 'collector_number': str(e['collector_number'])}
+            printing_names[(item['set'], item['collector_number'].lower())] = e['name'].split(' // ')[0].strip()
+        else:
+            item = {'name': e['name'].split(' // ')[0].strip()}
+            if e.get('set_code'):
+                item['set'] = e['set_code'].lower()
+        key = tuple(sorted(item.items()))
+        if key not in seen:
+            seen.add(key)
+            identifiers.append(item)
 
-    for chunk in chunks:
-        identifiers = []
-        for e in chunk:
-            if e.get('scryfall_id'):
-                identifiers.append({'id': e['scryfall_id']})
-            else:
-                name = e['name'].split(' // ')[0].strip()
-                item = {'name': name}
-                if e.get('set_code'):
-                    item['set'] = e['set_code'].lower()
-                identifiers.append(item)
+    for start in range(0, len(identifiers), BATCH_SIZE):
+        chunk_ids = identifiers[start:start + BATCH_SIZE]
 
-        data = _request_with_retry('POST', '/cards/collection', json={'identifiers': identifiers})
+        data = _request_with_retry('POST', '/cards/collection', json={'identifiers': chunk_ids})
         if data:
             for card in data.get('data', []):
                 _store_card(card)
 
-            # Retry any not_found without set code
-            not_found = data.get('not_found', [])
+            # Retry misses more loosely: an unknown set + collector number by
+            # name + set, a name not found in its set by name alone
             retry_ids = []
-            for nf in not_found:
-                if nf.get('set'):
-                    retry_ids.append({'name': nf.get('name')})
+            for nf in data.get('not_found', []):
+                if nf.get('collector_number') and nf.get('set'):
+                    name = printing_names.get((nf['set'].lower(), str(nf['collector_number']).lower()))
+                    if name:
+                        retry_ids.append({'name': name, 'set': nf['set'].lower()})
+                elif nf.get('set') and nf.get('name'):
+                    retry_ids.append({'name': nf['name']})
+            retry_ids = list({tuple(sorted(r.items())): r for r in retry_ids}.values())
 
             if retry_ids:
                 time.sleep(RATE_DELAY)
