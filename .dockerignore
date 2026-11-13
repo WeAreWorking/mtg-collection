@@ -9,3 +9,5 @@ data/
 .git/
 .gitignore
 *.md
+.venv/
+.claude/

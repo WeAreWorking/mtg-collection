@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mtg-collection",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "flask", "--app", "run:app", "run", "--debug", "--port", "7432"],
+      "port": 7432
+    }
+  ]
+}
